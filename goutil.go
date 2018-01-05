@@ -6,6 +6,9 @@ import (
 	"io"
 	"os"
 	"strings"
+	"compress/gzip"
+	"bytes"
+	"crypto/rc4"
 )
 
 func FileExists(file string) bool {
@@ -93,4 +96,60 @@ func BytesMd5(b []byte) (string, error) {
 
 func StringMd5(s string) (string, error) {
 	return BytesMd5([]byte(s))
+}
+
+func Md5(b []byte) ([]byte, error) {
+	h := md5.New()
+	retn := 0
+	for {
+		btmp := b[retn:]
+		n, e := h.Write(btmp)
+		retn += n
+		if e != nil && retn < len(b) {
+			return nil, e
+		}
+		if retn >= len(b) {
+			break
+		}
+	}
+	return h.Sum(nil), nil
+}
+func Gzip(data []byte) ([]byte,error) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, err := zw.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf(err.Error())
+	}
+	zw.Flush()
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf(err.Error())
+	}
+	return buf.Bytes(), nil
+}
+
+func Gunzip(data []byte) ([]byte, error) {
+	buf := bytes.NewBuffer(data)
+	zr,eNew := gzip.NewReader(buf)
+	if eNew != nil {
+		return nil, eNew
+	}
+	var bufRet bytes.Buffer
+	_, err := io.Copy(&bufRet,zr)
+	if err != nil {
+		return nil, fmt.Errorf(err.Error())
+	}	
+	zr.Close()
+	return bufRet.Bytes(), nil
+}
+
+func Rc4(key []byte, data []byte) []byte {
+	c, e := rc4.NewCipher(key)
+	if e != nil {
+		fmt.Println("fail.")
+			return nil
+	}
+	bs := make([]byte, len(data))
+	c.XORKeyStream(bs, data)
+	return bs
 }
