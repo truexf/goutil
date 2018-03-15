@@ -11,6 +11,59 @@ import (
 	"crypto/rc4"
 )
 
+func leftRuneStr(s string, count int) string {
+	cnt := 0
+	for i, _ := range s {
+		cnt++
+		if cnt > count {
+			fmt.Println(cnt)
+			return s[:i]
+		}
+	}
+	return s
+}
+
+func lenRuneStr(s string) int {
+	ret := 0
+	for i, _ := range s {
+		ret++
+		if i == 0 {
+		}
+	}
+	return ret
+}
+
+func subRuneStr(s string, start int, count int) string {
+	if s == "" || start < 0 || count <= 0 {
+		return ""
+	}
+	cnt := 0
+	idx := -1
+	istart := -1
+	iend := -1
+	for i, _ := range s {
+		idx++
+		if istart == -1 && idx == start {
+			istart = i
+		}
+		if istart > -1 {
+			cnt++
+		}
+		if cnt > count {
+			iend = i
+			return s[istart:iend]
+		}
+	}
+	if istart > -1 {
+		if iend > -1 {
+			return s[istart:iend]
+		} else {
+			return s[istart:]
+		}
+	}
+	return ""
+}
+
 func FileExists(file string) bool {
 	_, err := os.Stat(file)
 	return err == nil
