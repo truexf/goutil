@@ -1,4 +1,5 @@
-package common
+//由多个环形队列拼接成的长队列，借鉴了c++ stl中dequeue的思想
+package goutil
 
 import (
 	"fmt"

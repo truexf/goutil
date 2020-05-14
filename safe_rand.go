@@ -1,4 +1,5 @@
-package common
+//线程安全的随机数生成器
+package goutil
 
 import (
 	"math/rand"

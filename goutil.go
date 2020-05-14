@@ -1,14 +1,14 @@
 package goutil
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/md5"
+	"crypto/rc4"
 	"fmt"
 	"io"
 	"os"
 	"strings"
-	"compress/gzip"
-	"bytes"
-	"crypto/rc4"
 )
 
 func leftRuneStr(s string, count int) string {
@@ -167,7 +167,7 @@ func Md5(b []byte) ([]byte, error) {
 	}
 	return h.Sum(nil), nil
 }
-func Gzip(data []byte) ([]byte,error) {
+func Gzip(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
 	_, err := zw.Write(data)
@@ -183,15 +183,15 @@ func Gzip(data []byte) ([]byte,error) {
 
 func Gunzip(data []byte) ([]byte, error) {
 	buf := bytes.NewBuffer(data)
-	zr,eNew := gzip.NewReader(buf)
+	zr, eNew := gzip.NewReader(buf)
 	if eNew != nil {
 		return nil, eNew
 	}
 	var bufRet bytes.Buffer
-	_, err := io.Copy(&bufRet,zr)
+	_, err := io.Copy(&bufRet, zr)
 	if err != nil {
 		return nil, fmt.Errorf(err.Error())
-	}	
+	}
 	zr.Close()
 	return bufRet.Bytes(), nil
 }
@@ -200,7 +200,7 @@ func Rc4(key []byte, data []byte) []byte {
 	c, e := rc4.NewCipher(key)
 	if e != nil {
 		fmt.Println("fail.")
-			return nil
+		return nil
 	}
 	bs := make([]byte, len(data))
 	c.XORKeyStream(bs, data)

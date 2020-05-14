@@ -1,4 +1,5 @@
-package common
+//双缓存文件写入器，双缓存的特点：在缓存满了刷磁盘的时候，让写入切换到另外一个缓存，避免flush的时候的锁卡住了缓存写入
+package goutil
 
 import (
 	"bytes"
@@ -77,7 +78,7 @@ func NewBufferedFileWriter(bufferSize int, flushIntervalSecond int, filePath str
 	go ret.run()
 
 	go func() {
-		<- time.After(ret.flushInterval)
+		<-time.After(ret.flushInterval)
 		ret.Flush(0)
 	}()
 
@@ -195,7 +196,7 @@ func (m *BufferedFileWriter) run() {
 
 			m.notifyFlush()
 			//waiting for flush done
-			<- m.freeChan
+			<-m.freeChan
 			m.bufferCurrent.Reset()
 			m.freeChan <- 1
 		case <-m.terminalSignal:

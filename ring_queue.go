@@ -1,5 +1,5 @@
 // 环形双向队列
-package common
+package goutil
 
 import (
 	"fmt"

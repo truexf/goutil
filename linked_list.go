@@ -1,5 +1,5 @@
 // 双向链表
-package common
+package goutil
 
 import (
 	"sync"
