@@ -37,8 +37,47 @@ func (m *LinkedList) internalUnlock() {
 	}
 }
 
-func (m *LinkedList) PushTail(data interface{}) {
+func (m *LinkedList) InsertBefore(data interface{}, relative *LinkedNode) bool {
+	if m == nil || data == nil || relative == nil {
+		return false
+	}
 	m.internalLock()
+	defer m.internalUnlock()
+	if relative == m.head {
+		m.PushHead(data, false)
+		return true
+	}
+	node := &LinkedNode{Data: data, PriorNode: relative.PriorNode, NextNode: relative}
+	if relative.PriorNode != nil {
+		relative.PriorNode.NextNode = node
+	}
+	relative.PriorNode = node
+	return true
+}
+
+func (m *LinkedList) InsertAfter(data interface{}, relative *LinkedNode) bool {
+	if m == nil || data == nil || relative == nil {
+		return false
+	}
+	m.internalLock()
+	defer m.internalUnlock()
+	if relative == m.tail {
+		m.PushTail(data, false)
+		return true
+	}
+	node := &LinkedNode{Data: data, PriorNode: relative, NextNode: relative.NextNode}
+	if relative.NextNode != nil {
+		relative.NextNode.PriorNode = node
+	}
+	relative.NextNode = node
+	return true
+}
+
+func (m *LinkedList) PushTail(data interface{}, lock bool) {
+	if lock {
+		m.internalLock()
+		defer m.internalUnlock()
+	}
 	node := &LinkedNode{PriorNode: m.tail, NextNode: nil, Data: data}
 	if m.tail != nil {
 		node.PriorNode = m.tail
@@ -48,11 +87,13 @@ func (m *LinkedList) PushTail(data interface{}) {
 	if m.head == nil {
 		m.head = node
 	}
-	m.internalUnlock()
 }
 
-func (m *LinkedList) PushHead(data interface{}) {
-	m.internalLock()
+func (m *LinkedList) PushHead(data interface{}, lock bool) {
+	if lock {
+		m.internalLock()
+		defer m.internalUnlock()
+	}
 	node := &LinkedNode{PriorNode: nil, NextNode: m.head, Data: data}
 	if m.head != nil {
 		node.NextNode = m.head
@@ -65,13 +106,38 @@ func (m *LinkedList) PushHead(data interface{}) {
 	m.internalUnlock()
 }
 
-func (m *LinkedList) PopTail() interface{} {
+func (m *LinkedList) Delete(node *LinkedNode) {
+	if m == nil || node == nil {
+		return
+	}
 	m.internalLock()
+	defer m.internalUnlock()
+	if node == m.head {
+		m.PopHead(false)
+		return
+	} else if node == m.tail {
+		m.PopTail(false)
+		return
+	} else {
+		if node.PriorNode != nil {
+			node.PriorNode.NextNode = node.NextNode
+		}
+		if node.NextNode != nil {
+			node.NextNode.PriorNode = node.PriorNode
+		}
+	}
+}
+
+func (m *LinkedList) PopTail(lock bool) interface{} {
+	if lock {
+		m.internalLock()
+		defer m.internalUnlock()
+	}
 	ret := m.tail
 	if ret != nil {
 		if ret.PriorNode != nil {
-			ret.PriorNode.NextNode = nil
 			m.tail = ret.PriorNode
+			ret.PriorNode.NextNode = nil
 		} else {
 			if m.tail == m.head {
 				m.tail = nil
@@ -79,20 +145,22 @@ func (m *LinkedList) PopTail() interface{} {
 			}
 		}
 	}
-	m.internalUnlock()
 	if ret == nil {
 		return nil
 	}
 	return ret.Data
 }
 
-func (m *LinkedList) PopHead() interface{} {
-	m.internalLock()
+func (m *LinkedList) PopHead(lock bool) interface{} {
+	if lock {
+		m.internalLock()
+		defer m.internalUnlock()
+	}
 	ret := m.head
 	if ret != nil {
 		if ret.NextNode != nil {
-			ret.NextNode.PriorNode = nil
 			m.head = ret.NextNode
+			ret.NextNode.PriorNode = nil
 		} else {
 			if m.tail == m.head {
 				m.tail = nil
@@ -100,7 +168,6 @@ func (m *LinkedList) PopHead() interface{} {
 			}
 		}
 	}
-	m.internalUnlock()
 	if ret == nil {
 		return nil
 	}
