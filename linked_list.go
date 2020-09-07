@@ -15,6 +15,7 @@ type LinkedList struct {
 	threadSafe bool
 	head       *LinkedNode
 	tail       *LinkedNode
+	Len        int
 }
 
 func NewLinkedList(threadSafe bool) *LinkedList {
@@ -52,6 +53,7 @@ func (m *LinkedList) InsertBefore(data interface{}, relative *LinkedNode) bool {
 		relative.PriorNode.NextNode = node
 	}
 	relative.PriorNode = node
+	m.Len ++
 	return true
 }
 
@@ -70,6 +72,7 @@ func (m *LinkedList) InsertAfter(data interface{}, relative *LinkedNode) bool {
 		relative.NextNode.PriorNode = node
 	}
 	relative.NextNode = node
+	m.Len ++
 	return true
 }
 
@@ -87,6 +90,7 @@ func (m *LinkedList) PushTail(data interface{}, lock bool) {
 	if m.head == nil {
 		m.head = node
 	}
+	m.Len ++
 }
 
 func (m *LinkedList) PushHead(data interface{}, lock bool) {
@@ -103,7 +107,7 @@ func (m *LinkedList) PushHead(data interface{}, lock bool) {
 	if m.tail == nil {
 		m.tail = node
 	}
-	m.internalUnlock()
+	m.Len ++
 }
 
 func (m *LinkedList) Delete(node *LinkedNode) {
@@ -125,6 +129,7 @@ func (m *LinkedList) Delete(node *LinkedNode) {
 		if node.NextNode != nil {
 			node.NextNode.PriorNode = node.PriorNode
 		}
+		m.Len --
 	}
 }
 
@@ -144,6 +149,7 @@ func (m *LinkedList) PopTail(lock bool) interface{} {
 				m.head = nil
 			}
 		}
+		m.Len --
 	}
 	if ret == nil {
 		return nil
@@ -167,6 +173,7 @@ func (m *LinkedList) PopHead(lock bool) interface{} {
 				m.head = nil
 			}
 		}
+		m.Len --
 	}
 	if ret == nil {
 		return nil
