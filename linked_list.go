@@ -181,7 +181,7 @@ func (m *LinkedList) PopHead(lock bool) interface{} {
 	return ret.Data
 }
 
-func (m *LinkedList) Iterate(iterator func(node *LinkedNode, canceled *bool)) {
+func (m *LinkedList) Iterate(iterator func(data interface{}, canceled *bool)) {
 	m.internalLock()
 	defer m.internalUnlock()
 	node := m.head
@@ -193,7 +193,7 @@ func (m *LinkedList) Iterate(iterator func(node *LinkedNode, canceled *bool)) {
 		//if node.Data.(int) == 6 {
 		//	fmt.Printf("*%d-%d\n", node.PriorNode.Data.(int), node.NextNode.Data.(int))
 		//}
-		iterator(node, &canceled)
+		iterator(node.Data, &canceled)
 		if canceled {
 			break
 		}

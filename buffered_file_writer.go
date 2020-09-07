@@ -92,7 +92,7 @@ func (m *BufferedFileWriter) Write(bts []byte) error {
 	if len(bts) == 0 {
 		return fmt.Errorf("empty slice")
 	}
-	m.incomingQueue.PushTail(bts)
+	m.incomingQueue.PushTail(bts, true)
 	m.incomingNotifyChan <- 1
 	return nil
 }
@@ -158,7 +158,7 @@ func (m *BufferedFileWriter) writeBuffer(bts []byte) {
 	}
 	freeLen := m.bufferCap - m.bufferCurrent.Len()
 	if freeLen < len(bts) {
-		m.incomingQueue.PushHead(bts[freeLen:])
+		m.incomingQueue.PushHead(bts[freeLen:], true)
 		m.incomingNotifyChan <- 1
 		bts = bts[:freeLen]
 	}
@@ -186,7 +186,7 @@ func (m *BufferedFileWriter) run() {
 		case <-m.flushSignal:
 			//process queued data
 			for {
-				data := m.incomingQueue.PopHead()
+				data := m.incomingQueue.PopHead(true)
 				if data != nil {
 					m.writeBuffer(data.([]byte))
 				} else {
@@ -203,7 +203,7 @@ func (m *BufferedFileWriter) run() {
 			fmt.Println("terminated,shutdown")
 			//process queued data
 			for {
-				data := m.incomingQueue.PopHead()
+				data := m.incomingQueue.PopHead(true)
 				if data != nil {
 					m.writeBuffer(data.([]byte))
 				} else {
@@ -218,7 +218,7 @@ func (m *BufferedFileWriter) run() {
 			m.terminalDone <- 1
 			return
 		case <-m.incomingNotifyChan:
-			data := m.incomingQueue.PopHead()
+			data := m.incomingQueue.PopHead(true)
 			if data != nil {
 				m.writeBuffer(data.([]byte))
 			}

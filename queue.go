@@ -39,14 +39,14 @@ func (m *Queue) Produce(data interface{}, waitTime time.Duration) error {
 	var chunk *RingQueue = nil
 	if m.chunkList.tail == nil {
 		chunk = NewRingQueue(m.chunkSize, false)
-		m.chunkList.PushTail(chunk)
+		m.chunkList.PushTail(chunk, true)
 	} else {
 		chunk = m.chunkList.tail.Data.(*RingQueue)
 	}
 	if err := chunk.PushTail(data, 0); err != nil {
 		//queue was full
 		chunk = NewRingQueue(m.chunkSize, false)
-		m.chunkList.PushTail(chunk)
+		m.chunkList.PushTail(chunk, true)
 		chunk.PushTail(data, 0)
 	}
 	return nil
@@ -68,7 +68,7 @@ func (m *Queue) Consume(waitTime time.Duration) (interface{}, error) {
 	chunk = m.chunkList.head.Data.(*RingQueue)
 	ret, _ := chunk.PopHead(0)
 	if chunk.Size() == 0 {
-		m.chunkList.PopHead()
+		m.chunkList.PopHead(true)
 	}
 	return ret, nil
 }
