@@ -158,13 +158,22 @@ func (m *BufferedFileWriter) writeBuffer(bts []byte) {
 	}
 	freeLen := m.bufferCap - m.bufferCurrent.Len()
 	if freeLen < len(bts) {
+		/*
+		因为goroutine并发调度次序不可控，逻辑上这里会导致尾部的buf被提前写入。
+		这里没有问题，因为该函数writeBuffer（必须保证）只在一个goroutine里被调用。
+		如果缺少以上说明，代码阅读到这里可能产生疑惑。特此说明。
+		实际上在并发(多线程)编程里，一个预先的并发设计规划是很重要的，很难依赖某种设计模式，
+		或者语言特性的约束来达到并发有序。
+		*/
 		m.incomingQueue.PushHead(bts[freeLen:], true)
 		m.incomingNotifyChan <- 1
 		bts = bts[:freeLen]
 	}
 	m.bufferCurrent.Write(bts)
 	if m.bufferCurrent.Len() >= m.bufferCap {
+		//通知写磁盘
 		m.notifyFlush()
+		//切换活动buf
 		if m.bufferCurrent == &m.buffer1 {
 			m.bufferCurrent = &m.buffer2
 		} else {
@@ -175,6 +184,7 @@ func (m *BufferedFileWriter) writeBuffer(bts []byte) {
 
 func (m *BufferedFileWriter) notifyFlush() {
 	//waiting for flushing done
+	//freeChan会在flush后入队列，因此这里必须等待，以保证多个flush按次序进行，不会重叠
 	<-m.freeChan
 	//notify
 	m.flushChan <- m.bufferCurrent
