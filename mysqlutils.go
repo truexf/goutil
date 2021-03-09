@@ -1,4 +1,4 @@
-package db
+package goutil
 
 import (
 	"strings"
