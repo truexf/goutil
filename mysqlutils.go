@@ -1,10 +1,11 @@
-package goutil
+package db
 
 import (
 	"strings"
 	"database/sql/driver"
 	"strconv"
 	"time"
+	"reflect"
 )
 
 const digits01 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
@@ -178,6 +179,8 @@ func MySqlMogrify(noBackslashEscapes bool, query string, args ...interface{}) (s
 			buf = strconv.AppendInt(buf, int64(v), 10)
 		case float64:
 			buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+		case float32:
+			buf = strconv.AppendFloat(buf, float64(v), 'g', -1, 64)
 		case bool:
 			if v {
 				buf = append(buf, '1')
@@ -249,9 +252,27 @@ func MySqlMogrify(noBackslashEscapes bool, query string, args ...interface{}) (s
 			}
 			buf = append(buf, '\'')
 		default:
-			return "1", driver.ErrSkip
+			vk := reflect.ValueOf(arg).Kind()
+			switch vk {
+			case reflect.String:
+				sValue := reflect.ValueOf(arg).String()
+				buf = append(buf, '\'')
+				if !noBackslashEscapes {
+					buf = escapeStringBackslash(buf, sValue)
+				} else {
+					buf = escapeStringQuotes(buf, sValue)
+				}
+				buf = append(buf, '\'')
+			case reflect.Float64,reflect.Float32:
+				fValue := reflect.ValueOf(arg).Float()
+				buf = strconv.AppendFloat(buf, fValue, 'g', -1, 64)
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+				iValue := reflect.ValueOf(arg).Int()
+				buf = strconv.AppendInt(buf, iValue, 10)
+			default:
+				return "", driver.ErrSkip
+			}
 		}
-
 	}
 	if argPos != len(args) {
 		return "", driver.ErrSkip
