@@ -1,11 +1,11 @@
 package goutil
 
 import (
-	"strings"
 	"database/sql/driver"
-	"strconv"
-	"time"
 	"reflect"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const digits01 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
@@ -146,12 +146,127 @@ func escapeStringQuotes(buf []byte, v string) []byte {
 	return buf[:pos]
 }
 
+func MySqlEscape(noBackslashEscapes bool, v interface{}) (string, error) {
+	buf := make([]byte, 0)
+	buf = buf[:0]
+	switch v := v.(type) {
+	case int64:
+		buf = strconv.AppendInt(buf, v, 10)
+	case int:
+		buf = strconv.AppendInt(buf, int64(v), 10)
+	case float64:
+		buf = strconv.AppendFloat(buf, v, 'g', -1, 64)
+	case float32:
+		buf = strconv.AppendFloat(buf, float64(v), 'g', -1, 64)
+	case bool:
+		if v {
+			buf = append(buf, '1')
+		} else {
+			buf = append(buf, '0')
+		}
+	case time.Time:
+		if v.IsZero() {
+			buf = append(buf, "'0000-00-00'"...)
+		} else {
+			v = v.Add(time.Nanosecond * 500) // To round under microsecond
+			year := v.Year()
+			year100 := year / 100
+			year1 := year % 100
+			month := v.Month()
+			day := v.Day()
+			hour := v.Hour()
+			minute := v.Minute()
+			second := v.Second()
+			micro := v.Nanosecond() / 1000
+
+			buf = append(buf, []byte{
+				'\'',
+				digits10[year100], digits01[year100],
+				digits10[year1], digits01[year1],
+				'-',
+				digits10[month], digits01[month],
+				'-',
+				digits10[day], digits01[day],
+				' ',
+				digits10[hour], digits01[hour],
+				':',
+				digits10[minute], digits01[minute],
+				':',
+				digits10[second], digits01[second],
+			}...)
+
+			if micro != 0 {
+				micro10000 := micro / 10000
+				micro100 := micro / 100 % 100
+				micro1 := micro % 100
+				buf = append(buf, []byte{
+					'.',
+					digits10[micro10000], digits01[micro10000],
+					digits10[micro100], digits01[micro100],
+					digits10[micro1], digits01[micro1],
+				}...)
+			}
+			buf = append(buf, '\'')
+		}
+	case []byte:
+		if v == nil {
+			buf = append(buf, "NULL"...)
+		} else {
+			buf = append(buf, "_binary'"...)
+			if !noBackslashEscapes {
+				buf = escapeBytesBackslash(buf, v)
+			} else {
+				buf = escapeBytesQuotes(buf, v)
+			}
+			buf = append(buf, '\'')
+		}
+	case string:
+		buf = append(buf, '\'')
+		if !noBackslashEscapes {
+			buf = escapeStringBackslash(buf, v)
+		} else {
+			buf = escapeStringQuotes(buf, v)
+		}
+		buf = append(buf, '\'')
+	default:
+		vk := reflect.ValueOf(v).Kind()
+		switch vk {
+		case reflect.String:
+			sValue := reflect.ValueOf(v).String()
+			buf = append(buf, '\'')
+			if !noBackslashEscapes {
+				buf = escapeStringBackslash(buf, sValue)
+			} else {
+				buf = escapeStringQuotes(buf, sValue)
+			}
+			buf = append(buf, '\'')
+		case reflect.Float64, reflect.Float32:
+			fValue := reflect.ValueOf(v).Float()
+			buf = strconv.AppendFloat(buf, fValue, 'g', -1, 64)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+			iValue := reflect.ValueOf(v).Int()
+			buf = strconv.AppendInt(buf, iValue, 10)
+		default:
+			return "", driver.ErrSkip
+		}
+	}
+	return string(buf), nil
+}
+
+func MySqlEscapeDefault(noBackslashEscapes bool, v interface{}, defaultRet string) string {
+	ret, err := MySqlEscape(noBackslashEscapes, v)
+	if err != nil {
+		return defaultRet
+	}
+	return ret
+}
+
 func MySqlMogrify(noBackslashEscapes bool, query string, args ...interface{}) (string, error) {
 	if strings.Count(query, "?") != len(args) {
 		return "", driver.ErrSkip
 	}
 
-	buf := make([]byte,0)
+	buf := make([]byte, 0)
 	buf = buf[:0]
 	argPos := 0
 
@@ -263,7 +378,7 @@ func MySqlMogrify(noBackslashEscapes bool, query string, args ...interface{}) (s
 					buf = escapeStringQuotes(buf, sValue)
 				}
 				buf = append(buf, '\'')
-			case reflect.Float64,reflect.Float32:
+			case reflect.Float64, reflect.Float32:
 				fValue := reflect.ValueOf(arg).Float()
 				buf = strconv.AppendFloat(buf, fValue, 'g', -1, 64)
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
