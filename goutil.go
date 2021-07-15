@@ -7,65 +7,13 @@ import (
 	"crypto/rc4"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"syscall"
-	"runtime"
-	"log"
 )
-
-func leftRuneStr(s string, count int) string {
-	cnt := 0
-	for i, _ := range s {
-		cnt++
-		if cnt > count {
-			fmt.Println(cnt)
-			return s[:i]
-		}
-	}
-	return s
-}
-
-func lenRuneStr(s string) int {
-	ret := 0
-	for i, _ := range s {
-		ret++
-		if i == 0 {
-		}
-	}
-	return ret
-}
-
-func subRuneStr(s string, start int, count int) string {
-	if s == "" || start < 0 || count <= 0 {
-		return ""
-	}
-	cnt := 0
-	idx := -1
-	istart := -1
-	iend := -1
-	for i, _ := range s {
-		idx++
-		if istart == -1 && idx == start {
-			istart = i
-		}
-		if istart > -1 {
-			cnt++
-		}
-		if cnt > count {
-			iend = i
-			return s[istart:iend]
-		}
-	}
-	if istart > -1 {
-		if iend > -1 {
-			return s[istart:iend]
-		} else {
-			return s[istart:]
-		}
-	}
-	return ""
-}
 
 func FileExists(file string) bool {
 	_, err := os.Stat(file)
@@ -96,7 +44,7 @@ func SplitByLine(s string) (ret []string) {
 	}
 	ret3 := make([]string, 0)
 	ret2 := make([]string, 0)
-	tmp := make([]string, 0)
+	var tmp []string
 	ret1 := strings.Split(s, "\r\n")
 	var j int
 	j = len(ret1)
@@ -210,6 +158,7 @@ func Rc4(key []byte, data []byte) []byte {
 	return bs
 }
 
+// Deprecated: use syscall is Deprecated
 func Daemonize(nochdir, noclose int) int {
 	var ret, ret2 uintptr
 	var err syscall.Errno
@@ -228,9 +177,9 @@ func Daemonize(nochdir, noclose int) int {
 	}
 
 	// failure
-	if ret2 < 0 {
-		os.Exit(-1)
-	}
+	// if ret2 < 0 {
+	// 	os.Exit(-1)
+	// }
 
 	// handle exception for darwin
 	if darwin && ret2 == 1 {
@@ -269,4 +218,40 @@ func Daemonize(nochdir, noclose int) int {
 	}
 
 	return 0
+}
+
+func RestartProcess(keepFiles []*os.File, envVars []string, cleaner func() error) error {
+	if cleaner != nil {
+		if err := cleaner(); err != nil {
+			return err
+		}
+	}
+
+	// Use the original binary location. This works with symlinks such that if
+	// the file it points to has been changed we will use the updated symlink.
+	argv0, err := exec.LookPath(os.Args[0])
+	if err != nil {
+		return err
+	}
+
+	// working dir
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	//environment vars
+	var env []string
+	env = append(env, os.Environ()...)
+	env = append(env, envVars...)
+
+	allFiles := []*os.File{os.Stdin, os.Stdout, os.Stderr}
+	allFiles = append(allFiles, keepFiles...)
+
+	_, err = os.StartProcess(argv0, os.Args, &os.ProcAttr{
+		Dir:   wd,
+		Env:   env,
+		Files: allFiles,
+	})
+	return err
 }
