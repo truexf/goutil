@@ -20,7 +20,7 @@ type RingQueue struct {
 
 func NewRingQueue(capacity int, threadSafe bool) *RingQueue {
 	ret := new(RingQueue)
-	ret.queue = make([]interface{}, capacity, capacity)
+	ret.queue = make([]interface{}, capacity)
 	ret.capacity = capacity
 	ret.tailPos = capacity - 1
 	ret.queueSem = make(chan byte, capacity)
