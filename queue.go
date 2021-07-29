@@ -1,4 +1,7 @@
-//由多个环形队列拼接成的长队列，借鉴了c++ stl中dequeue的思想
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
 package goutil
 
 import (
@@ -7,6 +10,7 @@ import (
 	"time"
 )
 
+// 由多个环形队列拼接成的长队列，借鉴了c++ stl中dequeue的思想
 type Queue struct {
 	chunkList *LinkedList
 	chunkSize int

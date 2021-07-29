@@ -1,4 +1,7 @@
-//线程安全的随机数生成器
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
 package goutil
 
 import (
@@ -7,6 +10,7 @@ import (
 	"time"
 )
 
+// 线程安全的随机数生成器
 type SafeRand struct {
 	sync.Mutex
 	mathRand rand.Source

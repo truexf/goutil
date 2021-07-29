@@ -1,4 +1,7 @@
-// 双向链表
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
 package goutil
 
 import (
@@ -10,6 +13,8 @@ type LinkedNode struct {
 	NextNode  *LinkedNode
 	Data      interface{}
 }
+
+// 双向链表
 type LinkedList struct {
 	lock       sync.Mutex
 	threadSafe bool
@@ -53,7 +58,7 @@ func (m *LinkedList) InsertBefore(data interface{}, relative *LinkedNode) bool {
 		relative.PriorNode.NextNode = node
 	}
 	relative.PriorNode = node
-	m.Len ++
+	m.Len++
 	return true
 }
 
@@ -72,7 +77,7 @@ func (m *LinkedList) InsertAfter(data interface{}, relative *LinkedNode) bool {
 		relative.NextNode.PriorNode = node
 	}
 	relative.NextNode = node
-	m.Len ++
+	m.Len++
 	return true
 }
 
@@ -90,7 +95,7 @@ func (m *LinkedList) PushTail(data interface{}, lock bool) {
 	if m.head == nil {
 		m.head = node
 	}
-	m.Len ++
+	m.Len++
 }
 
 func (m *LinkedList) PushHead(data interface{}, lock bool) {
@@ -107,7 +112,7 @@ func (m *LinkedList) PushHead(data interface{}, lock bool) {
 	if m.tail == nil {
 		m.tail = node
 	}
-	m.Len ++
+	m.Len++
 }
 
 func (m *LinkedList) Delete(node *LinkedNode) {
@@ -129,7 +134,7 @@ func (m *LinkedList) Delete(node *LinkedNode) {
 		if node.NextNode != nil {
 			node.NextNode.PriorNode = node.PriorNode
 		}
-		m.Len --
+		m.Len--
 	}
 }
 
@@ -149,7 +154,7 @@ func (m *LinkedList) PopTail(lock bool) interface{} {
 				m.head = nil
 			}
 		}
-		m.Len --
+		m.Len--
 	}
 	if ret == nil {
 		return nil
@@ -173,7 +178,7 @@ func (m *LinkedList) PopHead(lock bool) interface{} {
 				m.head = nil
 			}
 		}
-		m.Len --
+		m.Len--
 	}
 	if ret == nil {
 		return nil
