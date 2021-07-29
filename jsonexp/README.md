@@ -3,7 +3,7 @@ JSON表达式一个简单优雅而又功能强大的“语义化”的配置语�
 JSON表达式组是一个由 n个“JSON表达式”组成的json数组，如下: 
 ```
 {
-	"ad - filter": [
+	"my_json_exp_group": [
 		//JSON表达式1
 		[
 
