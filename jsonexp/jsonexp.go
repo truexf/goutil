@@ -268,6 +268,7 @@ func (dict *Dictionary) registerSysemVariants() {
 	dict.RegisterVar("$isecond", ISecond)
 
 	dict.RegisterVar("$rand", Rand) //1-100
+	dict.RegisterVar("$break", nil)
 }
 
 func (dict *Dictionary) registerSystemCompares() {
@@ -511,6 +512,12 @@ func (m *JsonExp) Execute(context Context) error {
 	for _, v := range m.assignExpList {
 		if err := m.dict.Assign(v.AssignName, v.Left, v.Right, context); err != nil {
 			return err
+		} else {
+			if breaked, ok := context.GetCtxData("$break"); ok {
+				if r, _ := GetIntValue(breaked); r == 1 {
+					break
+				}
+			}
 		}
 	}
 	return nil
@@ -672,6 +679,12 @@ func (m *JsonExpGroup) Execute(context Context) error {
 	for _, jsonExp := range m.group {
 		if err := jsonExp.Execute(context); err != nil {
 			return err
+		} else {
+			if breaked, ok := context.GetCtxData("$break"); ok {
+				if r, _ := GetIntValue(breaked); r == 1 {
+					break
+				}
+			}
 		}
 	}
 	return nil
