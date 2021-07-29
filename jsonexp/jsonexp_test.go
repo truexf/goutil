@@ -37,6 +37,25 @@ func TestJsonExp(t *testing.T) {
 	fmt.Printf("%v", myVar)
 }
 
+func BenchmarkJsonExp(b *testing.B) {
+	dict := NewDictionary()
+	dict.RegisterVar("$my_var", nil)
+	cfg, err := NewConfiguration([]byte(jsonSource), dict)
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	// fmt.Printf("%v\n", cfg.)
+	g, ok := cfg.GetJsonExpGroup("my_json_exp_group")
+	if !ok {
+		b.Fatalf("no jsonexp group")
+	}
+	ctx := &DefaultContext{}
+	ctx.SetCtxData("$rand", time.Now().Second()%10)
+	for i := 0; i < b.N; i++ {
+		g.Execute(ctx)
+	}
+}
+
 var jsonSource string = `{
 	"name1": "value1",
 	"name2": 1234,
