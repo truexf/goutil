@@ -520,25 +520,8 @@ func (m *JsonExp) GetAssignExpList() []*AssignExp {
 	return m.assignExpList
 }
 
-// a group of JsonExp
-type JsonExpGroup struct {
-	dict        *Dictionary
-	groupSource interface{}
-	group       []*JsonExp
-}
-
-func NewJsonExpGroup(dict *Dictionary, groupSource interface{}) (*JsonExpGroup, error) {
-	if dict == nil || groupSource == nil {
-		return nil, fmt.Errorf("nil dict or groupSource")
-	}
-	ret := &JsonExpGroup{dict: dict, groupSource: groupSource}
-	if err := ret.parse(); err != nil {
-		return nil, err
-	}
-	return ret, nil
-}
-
 /*
+    a group of JsonExp
 	json-exp group configuration json demo:
 	{
 		//json-exp group, from first to last, executing each json-exp node, breaking execution if variant $break = true, $break is a system variant
@@ -569,6 +552,23 @@ func NewJsonExpGroup(dict *Dictionary, groupSource interface{}) (*JsonExpGroup, 
 		]
 	}
 */
+type JsonExpGroup struct {
+	dict        *Dictionary
+	groupSource interface{}
+	group       []*JsonExp
+}
+
+func NewJsonExpGroup(dict *Dictionary, groupSource interface{}) (*JsonExpGroup, error) {
+	if dict == nil || groupSource == nil {
+		return nil, fmt.Errorf("nil dict or groupSource")
+	}
+	ret := &JsonExpGroup{dict: dict, groupSource: groupSource}
+	if err := ret.parse(); err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
 func (m *JsonExpGroup) parse() error {
 	v := reflect.ValueOf(m.groupSource)
 	if v.Kind() != reflect.Slice {
@@ -658,6 +658,7 @@ func (m *JsonExpGroup) parse() error {
 	return nil
 }
 
+// 执行表达式组
 func (m *JsonExpGroup) Execute(context Context) error {
 	if context != nil {
 		if _, ok := context.GetCtxData("$rand"); !ok {
@@ -676,6 +677,7 @@ func (m *JsonExpGroup) List() []*JsonExp {
 	return m.group
 }
 
+// Configuration对象代表一个json配置,其中包含，0个或n个key/value键值对，以及0个或n个JSON表达式组
 type Configuration struct {
 	jsonSource    []byte
 	dict          *Dictionary
@@ -683,6 +685,7 @@ type Configuration struct {
 	jsonExpGroups map[string]*JsonExpGroup
 }
 
+// 传入json,创建一个Configuration对象
 func NewConfiguration(jsonSource []byte, dict *Dictionary) (*Configuration, error) {
 	if len(jsonSource) == 0 || dict == nil {
 		return nil, fmt.Errorf("invalid jsonSource or dict")
@@ -707,6 +710,7 @@ func NewConfiguration(jsonSource []byte, dict *Dictionary) (*Configuration, erro
 	return ret, nil
 }
 
+// 获取键值
 func (m *Configuration) GetNameValue(key string, context Context) (interface{}, bool) {
 	ret, ok := m.nameValues[key]
 	if !ok {
@@ -722,6 +726,7 @@ func (m *Configuration) GetNameValue(key string, context Context) (interface{}, 
 	return ret, true
 }
 
+// 获取JSON表达式组
 func (m *Configuration) GetJsonExpGroup(key string) (*JsonExpGroup, bool) {
 	ret, ok := m.jsonExpGroups[key]
 	if !ok {
