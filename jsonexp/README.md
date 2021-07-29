@@ -1,5 +1,5 @@
 ## JSON表达式
-广告主/广告位/发布商/全局配置中都有一个json底层元素，其key可能是filter,ad-filter,cond，cond0,cond1...等等,其值是一个JSON表达式组。JSON表达式组是一个由 n个“JSON表达式”组成的json数组，如下: 
+JSON表达式组是一个由 n个“JSON表达式”组成的json数组，如下: 
 ```
 {
 	"ad - filter": [
