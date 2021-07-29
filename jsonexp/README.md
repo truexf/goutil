@@ -52,24 +52,24 @@
 ```
 
 ### 系统变量
-名称	数据类型	说明 
-$datetime	string	yyyy-mm-dd hh:nn:ss 
-$date	string	yyyy-mm-dd 
-$time	string	hh:nn:ss 
-$stime	string	hh:nn 
-$year	string	yyyy 
-$month	string	mm 
-$day	string	dd 
-$hour	string	hh 
-$minute	string	nn 
-$second	string	ss 
-$iyear	int	当前4位年份 
-$imonth	int	当前月份整数 
-$iday	int	当前天1~30(,28,29,31)整数 
-$ihour	int	当前小时0~23 
-$iminute	int	当前分钟0~59 
-$isecond	int	当前秒0~59 
-$rand	int	1-100的随机数 
+表达式中的变量命名必须以$开头，且必须通过Dictionary.RegisterVar进行注册后才可以使用。预定义变量如下： 
+* $datetime	string	yyyy-mm-dd hh:nn:ss 
+* $date	string	yyyy-mm-dd 
+* $time	string	hh:nn:ss 
+* $stime	string	hh:nn 
+* $year	string	yyyy 
+* $month	string	mm 
+* $day	string	dd 
+* $hour	string	hh 
+* $minute	string	nn 
+* $second	string	ss 
+* $iyear	int	当前4位年份 
+* $imonth	int	当前月份整数 
+* $iday	int	当前天1~30(,28,29,31)整数 
+* $ihour	int	当前小时0~23 
+* $iminute	int	当前分钟0~59 
+* $isecond	int	当前秒0~59 
+* $rand	int	1-100的随机数 
 
 ### 条件(比较)运算符 
 * >   大于 
