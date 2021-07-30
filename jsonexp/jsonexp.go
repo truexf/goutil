@@ -230,10 +230,16 @@ func GetIntValue(v interface{}) (int64, bool) {
 type VarFunc func(context Context) (interface{}, error)
 type CompareFunc func(leftValue interface{}, rightValue interface{}, context Context) (bool, error)
 type AssignFunc func(varName string, leftValue interface{}, rightValue interface{}, context Context) error
+type Object interface {
+	GetPropertyValue(property string, context Context) interface{}
+	SetPropertyValue(property string, value interface{}, context Context)
+}
 
 type Dictionary struct {
 	varList         map[string]VarFunc
 	varListLock     sync.RWMutex
+	objectList      map[string]Object
+	objectListLock  sync.RWMutex
 	assignList      map[string]AssignFunc
 	assignListLock  sync.RWMutex
 	compareList     map[string]CompareFunc
@@ -241,7 +247,10 @@ type Dictionary struct {
 }
 
 func NewDictionary() *Dictionary {
-	ret := &Dictionary{varList: make(map[string]VarFunc), assignList: make(map[string]AssignFunc), compareList: make(map[string]CompareFunc)}
+	ret := &Dictionary{varList: make(map[string]VarFunc),
+		objectList:  make(map[string]Object),
+		assignList:  make(map[string]AssignFunc),
+		compareList: make(map[string]CompareFunc)}
 	ret.registerSysemVariants()
 	ret.registerSystemCompares()
 	ret.registerSystemAssign()
@@ -305,15 +314,35 @@ func (dict *Dictionary) registerSystemAssign() {
 	dict.RegisterAssign("%=", ModAssign)
 }
 
-func (m *Dictionary) RegisterVar(varName string, fetchFunc VarFunc) {
+// 注册变量，变量名必须以"$"开头，且不能与object重名
+func (m *Dictionary) RegisterVar(varName string, fetchFunc VarFunc) error {
 	if varName == "" {
-		return
+		return fmt.Errorf("varName is empty")
+	}
+	if _, ok := m.getObject(varName); ok {
+		return fmt.Errorf("object with the same name exists")
 	}
 	m.varListLock.Lock()
 	defer m.varListLock.Unlock()
 	m.varList[varName] = fetchFunc
+	return nil
 }
 
+// 注册对象，对象名必须以"$"开头，且不能与变量重名
+func (m *Dictionary) RegisterObject(objectName string, object Object) error {
+	if objectName == "" {
+		return fmt.Errorf("objectName is empty")
+	}
+	if _, ok := m.getVarFunc(objectName); ok {
+		return fmt.Errorf("variant with the same name exists")
+	}
+	m.objectListLock.Lock()
+	defer m.objectListLock.Unlock()
+	m.objectList[objectName] = object
+	return nil
+}
+
+// 注册条件运算符
 func (m *Dictionary) RegisterCompare(compareName string, compareFunc CompareFunc) {
 	if compareName == "" || compareFunc == nil {
 		return
@@ -323,6 +352,7 @@ func (m *Dictionary) RegisterCompare(compareName string, compareFunc CompareFunc
 	m.compareList[compareName] = compareFunc
 }
 
+// 注册赋值运算符
 func (m *Dictionary) RegisterAssign(assignName string, assignFunc AssignFunc) {
 	if assignName == "" || assignFunc == nil {
 		return
@@ -336,6 +366,13 @@ func (m *Dictionary) getVarFunc(varName string) (VarFunc, bool) {
 	m.varListLock.RLock()
 	defer m.varListLock.RUnlock()
 	ret, ok := m.varList[varName]
+	return ret, ok
+}
+
+func (m *Dictionary) getObject(objName string) (Object, bool) {
+	m.objectListLock.RLock()
+	defer m.objectListLock.RUnlock()
+	ret, ok := m.objectList[objName]
 	return ret, ok
 }
 
@@ -353,6 +390,19 @@ func (m *Dictionary) getAssignFunc(assignName string) (AssignFunc, bool) {
 	return ret, ok
 }
 
+// 获取对象的值， varName的格式为: ObjectName.PropertyName
+func (m *Dictionary) getObjectPropertyValue(varName string, context Context) (interface{}, error) {
+	parts := strings.Split(varName, ".")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("not object.property")
+	}
+	if obj, ok := m.getObject(parts[0]); ok {
+		return obj.GetPropertyValue(parts[1], context), nil
+	} else {
+		return nil, fmt.Errorf("not an object")
+	}
+}
+
 func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, error) {
 	if varName == "" {
 		return nil, fmt.Errorf("varName is empty")
@@ -360,6 +410,7 @@ func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, 
 	if len(varName) <= 1 || varName[0] != '$' {
 		return nil, fmt.Errorf("variable name must start with $")
 	}
+	oldVarName := varName
 	fn, ok := m.getVarFunc(varName)
 	usePostfix := false
 	postfix := ""
@@ -376,7 +427,11 @@ func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, 
 		}
 	}
 	if !varFound {
-		return nil, fmt.Errorf("variable %s not found", varName)
+		if ret, err := m.getObjectPropertyValue(oldVarName, context); err == nil {
+			return ret, err
+		} else {
+			return nil, fmt.Errorf("variable %s not found", varName)
+		}
 	}
 
 	var ret interface{}
@@ -430,10 +485,27 @@ func (m *Dictionary) Compare(compareName string, left string, right interface{},
 	return fn(leftValue, rightValue, context)
 }
 
+func (m *Dictionary) objectPropertyAssign(left string, right interface{}, context Context) bool {
+	parts := strings.Split(left, ".")
+	if len(parts) != 2 {
+		return false
+	}
+	if obj, ok := m.getObject(parts[0]); ok {
+		obj.SetPropertyValue(parts[1], right, context)
+		return true
+	}
+	return false
+}
+
 func (m *Dictionary) Assign(assignName string, left string, right interface{}, context Context) error {
 	if assignName == "" {
 		return fmt.Errorf("assign name is empty")
 	}
+
+	if assignName == "=" && m.objectPropertyAssign(left, right, context) {
+		return nil
+	}
+
 	fn, ok := m.getAssignFunc(assignName)
 	if !ok {
 		return fmt.Errorf("assign name %s not found", assignName)
@@ -453,6 +525,16 @@ func (m *Dictionary) ListVars() []string {
 	defer m.varListLock.RUnlock()
 	var ret []string
 	for k := range m.varList {
+		ret = append(ret, k)
+	}
+	return ret
+}
+
+func (m *Dictionary) ListObjects() []string {
+	m.objectListLock.RLock()
+	defer m.objectListLock.RUnlock()
+	var ret []string
+	for k := range m.objectList {
 		ret = append(ret, k)
 	}
 	return ret

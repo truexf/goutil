@@ -6,9 +6,25 @@ import (
 	"time"
 )
 
+type MyObj struct {
+	ver string
+}
+
+func (m *MyObj) GetPropertyValue(PropertyName string, context Context) interface{} {
+	return m.ver
+}
+
+func (m *MyObj) SetPropertyValue(property string, value interface{}, context Context) {
+	if s, ok := GetStringValue(value); ok {
+		m.ver = s
+	}
+}
+
 func TestJsonExp(t *testing.T) {
 	dict := NewDictionary()
 	dict.RegisterVar("$my_var", nil)
+	myobj := &MyObj{}
+	dict.RegisterObject("$myobj", myobj)
 	cfg, err := NewConfiguration([]byte(jsonSource), dict)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -34,7 +50,8 @@ func TestJsonExp(t *testing.T) {
 	ctx.SetCtxData("$rand", time.Now().Second()%10)
 	g.Execute(ctx)
 	myVar, _ := ctx.GetCtxData("$my_var")
-	fmt.Printf("%v", myVar)
+	fmt.Printf("%v\n", myVar)
+	fmt.Printf("myobj.ver: %s\n", myobj.ver)
 }
 
 func BenchmarkJsonExp(b *testing.B) {
@@ -72,6 +89,9 @@ var jsonSource string = `{
 				["$my_var", "=", "hello json exp"],
 				["$my_var", "+=", " hello go lang"]
 			]
+		],
+		[
+			["$myobj.version","=","v1.0"]
 		]
 	]
 }`
