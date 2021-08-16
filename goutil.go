@@ -7,12 +7,17 @@ import (
 	"crypto/rc4"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"syscall"
+	"unicode/utf8"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 func FileExists(file string) bool {
@@ -254,4 +259,19 @@ func RestartProcess(keepFiles []*os.File, envVars []string, cleaner func() error
 		Files: allFiles,
 	})
 	return err
+}
+
+func IsUtf8(bts []byte) bool {
+	return utf8.Valid(bts)
+}
+func GBK2UTF8(srcGbk []byte) ([]byte, error) {
+	gbkReader := bytes.NewReader(srcGbk)
+	utf8Reader := transform.NewReader(gbkReader, simplifiedchinese.GBK.NewDecoder())
+	return ioutil.ReadAll(utf8Reader)
+}
+
+func UTF82GBK(srcUtf8 []byte) ([]byte, error) {
+	utf8Reader := bytes.NewReader(srcUtf8)
+	gbkReader := transform.NewReader(utf8Reader, simplifiedchinese.GBK.NewEncoder())
+	return ioutil.ReadAll(gbkReader)
 }
