@@ -25,6 +25,14 @@ func FileExists(file string) bool {
 	return err == nil
 }
 
+func FilePathExists(filePath string) bool {
+	sts, err := os.Stat(filePath)
+	if err != nil {
+		return false
+	}
+	return sts.IsDir()
+}
+
 func FileModTime(file string) string {
 	fi, err := os.Stat(file)
 	if err != nil {
