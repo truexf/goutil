@@ -9,9 +9,12 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
+	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"unicode/utf8"
@@ -282,4 +285,130 @@ func UTF82GBK(srcUtf8 []byte) ([]byte, error) {
 	utf8Reader := bytes.NewReader(srcUtf8)
 	gbkReader := transform.NewReader(utf8Reader, simplifiedchinese.GBK.NewEncoder())
 	return ioutil.ReadAll(gbkReader)
+}
+
+func GetStringValue(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	rv := reflect.ValueOf(v)
+	switch kd := rv.Kind(); kd {
+	case reflect.Slice:
+		return ""
+	case reflect.String:
+		return v.(string)
+	case reflect.Float64, reflect.Float32:
+		return fmt.Sprintf("%f", v)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return fmt.Sprintf("%d", v)
+	default:
+		return ""
+	}
+}
+
+func UrlEncodedMarshal(structObj interface{}) string {
+	vl := reflect.ValueOf(structObj)
+	if vl.Kind() == reflect.Ptr {
+		vl = reflect.Indirect(vl)
+	}
+	if vl.Kind() != reflect.Struct {
+		return ""
+	}
+	tp := vl.Type()
+	ret := ""
+	for i := 0; i < tp.NumField(); i++ {
+		kv := "%s=%s"
+		tag := tp.Field(i).Tag.Get("json")
+		if tag == "" {
+			tag = tp.Field(i).Name
+		}
+		value := GetStringValue(vl.Field(i).Interface())
+		if value == "" {
+			continue
+		}
+		tagList := strings.Split(tag, ",")
+		if ret != "" {
+			ret += "&"
+		}
+		ret += fmt.Sprintf(kv, tagList[0], url.QueryEscape(value))
+	}
+	return ret
+}
+
+type JsonInt int
+type JsonStr string
+type JsonFloat64 float64
+
+func (m *JsonInt) UnmarshalJSON(bts []byte) error {
+	if len(bts) == 0 {
+		return nil
+	}
+	b := 0
+	e := len(bts)
+	if e > 2 {
+		if bts[0] == '"' {
+			b++
+		}
+		if bts[e-1] == '"' {
+			e--
+		}
+	}
+	if e == b {
+		e++
+	}
+	i, err := strconv.Atoi(string(bts[b:e]))
+	if err != nil {
+		*m = 0
+	} else {
+		*m = JsonInt(i)
+	}
+	return nil
+}
+
+func (m *JsonStr) UnmarshalJSON(bts []byte) error {
+	if len(bts) == 0 {
+		return nil
+	}
+	b := 0
+	e := len(bts)
+	if e > 2 {
+		if bts[0] == '"' {
+			b++
+		}
+		if bts[e-1] == '"' {
+			e--
+		}
+	}
+	if e == b {
+		e++
+	}
+	s := string(bts[b:e])
+	*m = JsonStr(s)
+	return nil
+}
+
+func (m *JsonFloat64) UnmarshalJSON(bts []byte) error {
+	if len(bts) == 0 {
+		return nil
+	}
+	b := 0
+	e := len(bts)
+	if e > 2 {
+		if bts[0] == '"' {
+			b++
+		}
+		if bts[e-1] == '"' {
+			e--
+		}
+	}
+	if e == b {
+		e++
+	}
+	f, err := strconv.ParseFloat(string(bts[b:e]), 64)
+	if err != nil {
+		*m = 0
+	} else {
+		*m = JsonFloat64(f)
+	}
+	return nil
 }
