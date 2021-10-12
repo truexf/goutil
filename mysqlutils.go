@@ -6,6 +6,7 @@ package goutil
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -397,4 +398,64 @@ func MySqlMogrify(noBackslashEscapes bool, query string, args ...interface{}) (s
 		return "", driver.ErrSkip
 	}
 	return string(buf), nil
+}
+
+func UpsertSql(dbTaggedObj interface{}, tableName string, keyFields []string) (string, error) {
+	if tableName == "" {
+		return "", fmt.Errorf("tableName is nil")
+	}
+
+	vl := reflect.ValueOf(dbTaggedObj)
+	if vl.Kind() == reflect.Ptr {
+		vl = reflect.Indirect(vl)
+	}
+	if vl.Kind() != reflect.Struct {
+		return "", fmt.Errorf("dbTaggedObj is not a struct")
+	}
+	tp := vl.Type()
+	fv := make(map[string]interface{})
+	for i := 0; i < tp.NumField(); i++ {
+		dbTag := tp.Field(i).Tag.Get("db")
+		if dbTag == "" {
+			continue
+		}
+		fv[dbTag] = vl.FieldByName(tp.Field(i).Name).Interface()
+	}
+	kfv := make(map[string]interface{})
+	for _, k := range keyFields {
+		if v, ok := fv[k]; ok {
+			kfv[k] = v
+		} else {
+			return "", fmt.Errorf("key field [%s] not found", k)
+		}
+	}
+	sqlFields := ""
+	sqlParams := ""
+	sqlValues := make([]interface{}, 0)
+	sqlUpdate := ""
+	sqlUpdateValues := make([]interface{}, 0)
+	for k, v := range fv {
+		if sqlFields != "" {
+			sqlFields += ", "
+			sqlParams += ", "
+		}
+		sqlFields += k
+		sqlParams += "?"
+		sqlValues = append(sqlValues, v)
+		if _, ok := kfv[k]; !ok {
+			if sqlUpdate != "" {
+				sqlUpdate += ", "
+			}
+			sqlUpdate += fmt.Sprintf("%s = ?", k)
+			sqlUpdateValues = append(sqlUpdateValues, v)
+		}
+	}
+	sqlValues = append(sqlValues, sqlUpdateValues...)
+	var sql string
+	if sqlUpdate != "" {
+		sql = fmt.Sprintf("insert into %s (%s) values (%s) on duplicate key update %s ", tableName, sqlFields, sqlParams, sqlUpdate)
+	} else {
+		sql = fmt.Sprintf("insert into %s (%s) values (%s)", tableName, sqlFields, sqlParams)
+	}
+	return MySqlMogrify(false, sql, sqlValues...)
 }
