@@ -71,6 +71,7 @@ JSON表达式组是一个由 n个“JSON表达式”组成的json数组，如下
 * $iminute	int	当前分钟0~59 
 * $isecond	int	当前秒0~59 
 * $rand	int	1-100的随机数 
+* $break int 当值为1时，终止当前条件表达式组的执行
 
 ### 条件(比较)运算符 
 * \>   大于 
