@@ -5,14 +5,27 @@
 package jsonexp
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"io"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	postfixLen      = "len"
+	postfixUpper    = "upper"
+	postfixLower    = "lower"
+	postfixFnv32    = "fnv32"
+	postfixFnv64    = "fnv64"
+	postfixMd5Lower = "md5"
+	postfixMd5Upper = "MD5"
 )
 
 type Context interface {
@@ -445,19 +458,44 @@ func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, 
 		return nil, err
 	}
 	if usePostfix {
-		if postfix == "lower" {
+		switch postfix {
+		case postfixLower:
 			if s, ok := GetStringValue(ret); ok {
 				return strings.ToLower(s), nil
 			}
-		} else if postfix == "upper" {
+		case postfixUpper:
 			if s, ok := GetStringValue(ret); ok {
 				return strings.ToUpper(s), nil
 			}
-		} else if postfix == "len" {
+		case postfixLen:
 			if s, ok := GetStringValue(ret); ok {
 				return len(s), nil
 			}
-		} else {
+		case postfixFnv32:
+			if s, ok := GetStringValue(ret); ok {
+				o := fnv.New32()
+				io.WriteString(o, s)
+				return o.Sum32(), nil
+			}
+		case postfixFnv64:
+			if s, ok := GetStringValue(ret); ok {
+				o := fnv.New64()
+				io.WriteString(o, s)
+				return o.Sum64(), nil
+			}
+		case postfixMd5Lower:
+			if s, ok := GetStringValue(ret); ok {
+				h := md5.New()
+				io.WriteString(h, s)
+				return fmt.Sprintf("%x", h.Sum(nil)), nil
+			}
+		case postfixMd5Upper:
+			if s, ok := GetStringValue(ret); ok {
+				h := md5.New()
+				io.WriteString(h, s)
+				return fmt.Sprintf("%X", h.Sum(nil)), nil
+			}
+		default:
 			return nil, fmt.Errorf("unknown postfix %s", postfix)
 		}
 	}
