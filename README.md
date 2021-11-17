@@ -25,3 +25,6 @@ mysql的工具类函数，最主要的是实现对sql语句的参数化处理，
 
 ## [goutil.go](https://github.com/truexf/goutil/tree/master/goutil.go)
 常用的通用化函数和类
+
+## [lru_file_cache.go](https://github.com/truexf/goutil/tree/master/lru_file_cache.go)
+基于LRU淘汰策略的文件缓存组件
