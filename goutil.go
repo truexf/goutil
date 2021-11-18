@@ -5,6 +5,8 @@ import (
 	"compress/gzip"
 	"crypto/md5"
 	"crypto/rc4"
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,11 +14,13 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -306,6 +310,110 @@ func GetStringValue(v interface{}) string {
 	}
 }
 
+func GetIntValueDefault(v interface{}, dft int64) int64 {
+	if ret, ok := GetIntValue(v); !ok {
+		return dft
+	} else {
+		return ret
+	}
+}
+
+func GetIntValue(v interface{}) (int64, bool) {
+	if v == nil {
+		return 0, true
+	}
+	rv := reflect.ValueOf(v)
+	switch kd := rv.Kind(); kd {
+	case reflect.Slice:
+		return 0, false
+	case reflect.String:
+		vs := v.(string)
+		if ret, err := strconv.ParseInt(vs, 0, 64); err != nil {
+			if retFloat, err := strconv.ParseFloat(vs, 64); err != nil {
+				return 0, false
+			} else {
+				return int64(retFloat), true
+			}
+		} else {
+			return ret, true
+		}
+	case reflect.Float64:
+		return int64(v.(float64)), true
+	case reflect.Float32:
+		return int64(v.(float32)), true
+	case reflect.Int:
+		return int64(v.(int)), true
+	case reflect.Int8:
+		return int64(v.(int8)), true
+	case reflect.Int16:
+		return int64(v.(int16)), true
+	case reflect.Int32:
+		return int64(v.(int32)), true
+	case reflect.Int64:
+		return v.(int64), true
+	case reflect.Uint:
+		return int64(v.(uint)), true
+	case reflect.Uint8:
+		return int64(v.(uint8)), true
+	case reflect.Uint16:
+		return int64(v.(uint16)), true
+	case reflect.Uint32:
+		return int64(v.(uint32)), true
+	case reflect.Uint64:
+		return int64(v.(uint64)), true
+	case reflect.Uintptr:
+		return int64(v.(uintptr)), true
+	default:
+		return 0, false
+	}
+}
+
+func GetFloatValue(v interface{}) (float64, bool) {
+	if v == nil {
+		return 0, true
+	}
+	rv := reflect.ValueOf(v)
+	switch kd := rv.Kind(); kd {
+	case reflect.Slice:
+		return 0, false
+	case reflect.String:
+		vs := v.(string)
+		if ret, err := strconv.ParseFloat(vs, 64); err != nil {
+			return 0, false
+		} else {
+			return ret, true
+		}
+	case reflect.Float64:
+		return v.(float64), true
+	case reflect.Float32:
+		return float64(v.(float32)), true
+	case reflect.Int:
+		return float64(v.(int)), true
+	case reflect.Int8:
+		return float64(v.(int8)), true
+	case reflect.Int16:
+		return float64(v.(int16)), true
+	case reflect.Int32:
+		return float64(v.(int32)), true
+	case reflect.Int64:
+		return float64(v.(int64)), true
+	case reflect.Uint:
+		return float64(v.(uint)), true
+	case reflect.Uint8:
+		return float64(v.(uint8)), true
+	case reflect.Uint16:
+		return float64(v.(uint16)), true
+	case reflect.Uint32:
+		return float64(v.(uint32)), true
+	case reflect.Uint64:
+		return float64(v.(uint64)), true
+	case reflect.Uintptr:
+		return float64(v.(uintptr)), true
+	default:
+		return 0, false
+	}
+}
+
 func UrlEncodedMarshal(structObj interface{}) string {
 	vl := reflect.ValueOf(structObj)
 	if vl.Kind() == reflect.Ptr {
@@ -411,4 +519,125 @@ func (m *JsonFloat64) UnmarshalJSON(bts []byte) error {
 		*m = JsonFloat64(f)
 	}
 	return nil
+}
+
+func (m *JsonInt) Scan(value interface{}) error {
+	*m = 0
+	if value == nil {
+		return nil
+	}
+	switch s := value.(type) {
+	case []uint8:
+		ss := string(s)
+		ii, err := strconv.ParseInt(ss, 10, 64)
+		if err == nil {
+			*m = JsonInt(ii)
+		}
+		return nil
+	}
+	r, b := GetIntValue(value)
+	if b {
+		*m = JsonInt(r)
+	} else {
+		*m = 0
+	}
+	return nil
+}
+
+func (m JsonInt) Value() (driver.Value, error) {
+	return float64(m), nil
+}
+
+func (m *JsonStr) Scan(value interface{}) error {
+	*m = ""
+	if value == nil {
+		return nil
+	}
+	switch s := value.(type) {
+	case string:
+		*m = JsonStr(s)
+	case []uint8:
+		*m = JsonStr(string(s))
+	}
+	return nil
+}
+
+func (m JsonStr) Value() (driver.Value, error) {
+	return string(m), nil
+}
+
+func (m *JsonFloat64) Scan(value interface{}) error {
+	*m = 0
+	if value == nil {
+		return nil
+	}
+	switch s := value.(type) {
+	case []uint8:
+		ss := string(s)
+		ii, err := strconv.ParseFloat(ss, 64)
+		if err == nil {
+			*m = JsonFloat64(ii)
+		}
+		return nil
+	}
+	r, b := GetFloatValue(value)
+	if b {
+		*m = JsonFloat64(r)
+	} else {
+		*m = 0
+	}
+	return nil
+}
+
+func (m JsonFloat64) Value() (driver.Value, error) {
+	return float64(m), nil
+}
+
+func LogStack(fd *os.File) {
+	stack := make([]byte, 1024*1024*100)
+	n := runtime.Stack(stack, true)
+	if n > 0 {
+		fd.WriteString(fmt.Sprintf("%s, numgoroutine: %d, process terminated, stack :\n", time.Now().Format("2006-01-02 15:04:05"), runtime.NumGoroutine()))
+		fd.Write(stack[:n])
+	} else {
+		fd.WriteString(fmt.Sprintf("%s, numgoroutine: %d, get stack fail.", time.Now().Format("2006-01-02 15:04:05"), runtime.NumGoroutine()))
+	}
+}
+
+func JsonMarshalNoHtmlEncode(t interface{}) ([]byte, error) {
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(t)
+	return buffer.Bytes(), err
+}
+
+func InStringList(list []string, s string) bool {
+	if len(list) == 0 {
+		return false
+	}
+	for _, v := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+func GetExePath() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	exePath, _ = filepath.EvalSymlinks(exePath)
+	return filepath.Dir(exePath)
+}
+
+func GetExeName() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	exePath, _ = filepath.EvalSymlinks(exePath)
+	return filepath.Base(exePath)
 }
