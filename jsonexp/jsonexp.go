@@ -346,9 +346,9 @@ func (m *Dictionary) RegisterObject(objectName string, object Object) error {
 	if objectName == "" {
 		return fmt.Errorf("objectName is empty")
 	}
-	if _, ok := m.getVarFunc(objectName); ok {
-		return fmt.Errorf("variant with the same name exists")
-	}
+	// if _, ok := m.getVarFunc(objectName); ok {
+	// 	return fmt.Errorf("variant with the same name exists")
+	// }
 	m.objectListLock.Lock()
 	defer m.objectListLock.Unlock()
 	m.objectList[objectName] = object
