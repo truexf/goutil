@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-package goutil
+package mysqlutil
 
 import (
 	"database/sql/driver"
@@ -457,5 +457,232 @@ func UpsertSql(dbTaggedObj interface{}, tableName string, keyFields []string) (s
 	} else {
 		sql = fmt.Sprintf("insert into %s (%s) values (%s)", tableName, sqlFields, sqlParams)
 	}
+	return MySqlMogrify(false, sql, sqlValues...)
+}
+
+func InsertSql(dbTaggedObj interface{}, tableName string) (string, error) {
+	if tableName == "" {
+		return "", fmt.Errorf("tableName is nil")
+	}
+
+	vl := reflect.ValueOf(dbTaggedObj)
+	if vl.Kind() == reflect.Ptr {
+		vl = reflect.Indirect(vl)
+	}
+	if vl.Kind() != reflect.Struct {
+		return "", fmt.Errorf("dbTaggedObj is not a struct")
+	}
+	tp := vl.Type()
+	fv := make(map[string]interface{})
+	for i := 0; i < tp.NumField(); i++ {
+		dbTag := tp.Field(i).Tag.Get("db")
+		if dbTag == "" {
+			continue
+		}
+		fv[dbTag] = vl.FieldByName(tp.Field(i).Name).Interface()
+	}
+	sqlFields := ""
+	sqlParams := ""
+	sqlValues := make([]interface{}, 0)
+	for k, v := range fv {
+		if sqlFields != "" {
+			sqlFields += ", "
+			sqlParams += ", "
+		}
+		sqlFields += k
+		sqlParams += "?"
+		sqlValues = append(sqlValues, v)
+	}
+	sql := fmt.Sprintf("insert into %s (%s) values (%s)", tableName, sqlFields, sqlParams)
+
+	return MySqlMogrify(false, sql, sqlValues...)
+}
+
+func DeleteSql(dbTaggedObj interface{}, tableName string) (string, error) {
+	if tableName == "" {
+		return "", fmt.Errorf("tableName is nil")
+	}
+
+	vl := reflect.ValueOf(dbTaggedObj)
+	if vl.Kind() == reflect.Ptr {
+		vl = reflect.Indirect(vl)
+	}
+	if vl.Kind() != reflect.Struct {
+		return "", fmt.Errorf("dbTaggedObj is not a struct")
+	}
+	tp := vl.Type()
+	fv := make(map[string]interface{})
+	for i := 0; i < tp.NumField(); i++ {
+		dbTag := tp.Field(i).Tag.Get("db")
+		if dbTag == "" {
+			continue
+		}
+		fv[dbTag] = vl.FieldByName(tp.Field(i).Name).Interface()
+	}
+	sqlFields := ""
+	sqlValues := make([]interface{}, 0)
+	for k, v := range fv {
+		if sqlFields != "" {
+			sqlFields += " and "
+		}
+		sqlFields += fmt.Sprintf("%s = ?", k)
+		sqlValues = append(sqlValues, v)
+	}
+	sql := fmt.Sprintf("delete from %s where %s", tableName, sqlFields)
+
+	return MySqlMogrify(false, sql, sqlValues...)
+}
+
+func SelectSql(dbTaggedObj interface{}, tableName string, selectFields string) (string, error) {
+	if tableName == "" {
+		return "", fmt.Errorf("tableName is nil")
+	}
+
+	vl := reflect.ValueOf(dbTaggedObj)
+	if vl.Kind() == reflect.Ptr {
+		vl = reflect.Indirect(vl)
+	}
+	if vl.Kind() != reflect.Struct {
+		return "", fmt.Errorf("dbTaggedObj is not a struct")
+	}
+	tp := vl.Type()
+	fv := make(map[string]interface{})
+	for i := 0; i < tp.NumField(); i++ {
+		dbTag := tp.Field(i).Tag.Get("db")
+		if dbTag == "" {
+			continue
+		}
+		fv[dbTag] = vl.FieldByName(tp.Field(i).Name).Interface()
+	}
+	sqlFields := ""
+	sqlValues := make([]interface{}, 0)
+	for k, v := range fv {
+		if sqlFields != "" {
+			sqlFields += " and "
+		}
+		sqlFields += fmt.Sprintf("%s = ?", k)
+		sqlValues = append(sqlValues, v)
+	}
+	if selectFields == "" {
+		selectFields = "*"
+	}
+	sql := fmt.Sprintf("select %s from %s where %s", selectFields, tableName, sqlFields)
+
+	return MySqlMogrify(false, sql, sqlValues...)
+}
+
+func UpsertSqlM(objMap map[string]interface{}, tableName string, keyFields []string) (string, error) {
+	if tableName == "" {
+		return "", fmt.Errorf("tableName is nil")
+	}
+	if objMap == nil {
+		return "", fmt.Errorf("objMap is nil")
+	}
+
+	keyFieldValue := make(map[string]interface{})
+	for _, k := range keyFields {
+		if v, ok := objMap[k]; ok {
+			keyFieldValue[k] = v
+		} else {
+			return "", fmt.Errorf("key field [%s] not found", k)
+		}
+	}
+	sqlFields := ""
+	sqlParams := ""
+	sqlValues := make([]interface{}, 0)
+	sqlUpdate := ""
+	sqlUpdateValues := make([]interface{}, 0)
+	for k, v := range objMap {
+		if sqlFields != "" {
+			sqlFields += ", "
+			sqlParams += ", "
+		}
+		sqlFields += k
+		sqlParams += "?"
+		sqlValues = append(sqlValues, v)
+		if _, ok := keyFieldValue[k]; !ok {
+			if sqlUpdate != "" {
+				sqlUpdate += ", "
+			}
+			sqlUpdate += fmt.Sprintf("%s = ?", k)
+			sqlUpdateValues = append(sqlUpdateValues, v)
+		}
+	}
+	sqlValues = append(sqlValues, sqlUpdateValues...)
+	var sql string
+	if sqlUpdate != "" {
+		sql = fmt.Sprintf("insert into %s (%s) values (%s) on duplicate key update %s ", tableName, sqlFields, sqlParams, sqlUpdate)
+	} else {
+		sql = fmt.Sprintf("insert into %s (%s) values (%s)", tableName, sqlFields, sqlParams)
+	}
+	return MySqlMogrify(false, sql, sqlValues...)
+}
+
+func InsertSqlM(objMap map[string]interface{}, tableName string) (string, error) {
+	if tableName == "" {
+		return "", fmt.Errorf("tableName is nil")
+	}
+	if objMap == nil {
+		return "", fmt.Errorf("objMap is nil")
+	}
+
+	sqlFields := ""
+	sqlParams := ""
+	sqlValues := make([]interface{}, 0)
+	for k, v := range objMap {
+		if sqlFields != "" {
+			sqlFields += ", "
+			sqlParams += ", "
+		}
+		sqlFields += k
+		sqlParams += "?"
+		sqlValues = append(sqlValues, v)
+	}
+	sql := fmt.Sprintf("insert into %s (%s) values (%s)", tableName, sqlFields, sqlParams)
+	return MySqlMogrify(false, sql, sqlValues...)
+}
+
+func DeleteSqlM(objMap map[string]interface{}, tableName string) (string, error) {
+	if tableName == "" {
+		return "", fmt.Errorf("tableName is nil")
+	}
+	if objMap == nil {
+		return "", fmt.Errorf("objMap is nil")
+	}
+
+	sqlFields := ""
+	sqlValues := make([]interface{}, 0)
+	for k, v := range objMap {
+		if sqlFields != "" {
+			sqlFields += " and "
+		}
+		sqlFields += fmt.Sprintf("%s = ?", k)
+		sqlValues = append(sqlValues, v)
+	}
+	sql := fmt.Sprintf("delete from %s where %s", tableName, sqlFields)
+	return MySqlMogrify(false, sql, sqlValues...)
+}
+
+func SelectSqlM(objMap map[string]interface{}, tableName string, selectFields string) (string, error) {
+	if tableName == "" {
+		return "", fmt.Errorf("tableName is nil")
+	}
+	if objMap == nil {
+		return "", fmt.Errorf("objMap is nil")
+	}
+
+	sqlFields := ""
+	sqlValues := make([]interface{}, 0)
+	for k, v := range objMap {
+		if sqlFields != "" {
+			sqlFields += " and "
+		}
+		sqlFields += fmt.Sprintf("%s = ?", k)
+		sqlValues = append(sqlValues, v)
+	}
+	if selectFields == "" {
+		selectFields = "*"
+	}
+	sql := fmt.Sprintf("select %s from %s where %s", selectFields, tableName, sqlFields)
 	return MySqlMogrify(false, sql, sqlValues...)
 }
