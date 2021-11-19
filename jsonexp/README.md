@@ -52,9 +52,9 @@ JSON表达式组是一个由 n个“JSON表达式”组成的json数组，如下
 ]
 ```
 ### 管道
-管道支持对变量进行管道化处理
-格式： $varName[|pipeLineFunction1[|pipeLineFunction2[|...]]]
-举例： 
+管道支持对变量进行管道化处理  
+格式： $varName[|pipeLineFunction1[|pipeLineFunction2[|...]]]  
+举例：   
 ```
 [
     ["$my_var|md5|fnv32",">", 100000],
