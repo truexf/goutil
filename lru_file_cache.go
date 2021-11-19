@@ -8,6 +8,7 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -72,7 +73,7 @@ func (m *lruFileInfo) load() (loading, modified bool, err error) {
 		if stat.Size() > m.sizeLimit {
 			return false, false, ErrorFileSizeLimited
 		}
-		if bts, err := os.ReadFile(m.absPath); err != nil {
+		if bts, err := ioutil.ReadFile(m.absPath); err != nil {
 			return false, false, err
 		} else {
 			md5Hash := md5.New()
