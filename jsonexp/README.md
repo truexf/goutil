@@ -116,13 +116,14 @@ abcdefg ~* efg 返回真
 [“$resp.title”,”cv”,”整形,医疗,美容,减肥”] 
 * ^cv	cv的反义词 
 
-### 变量后缀
-变量后缀是在变量后面以英文圆点追加的特定意义的后缀，可以对变量执行对应函数，其结果为函数执行结果，比如： 
-$resp.landing.len
-其中.len是$resp.landing的后缀，其功能是返回该变量的字符个数 
-* .len	int	返回变量值的字符个数
-* .upper	string	返回变量值的英文大写
-* .lower	string	返回变量值的英文小写
+### 系统预定义管道函数
+* len	int	返回入参的字符个数
+* upper	string	返回入参的英文大写
+* lower	string	返回入参的英文小写
+* md5 string 返回入参的md5哈希hex值，小写
+* MD5 string 返回入参的md5哈希hex值，大写
+* fnv32 uint32 返回入参的fnv32哈希值
+* fnv64 uint64 返回入参的fnv64哈希值
 
 ### 赋值操作符
 * =	赋值
