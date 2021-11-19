@@ -91,7 +91,12 @@ var jsonSource string = `{
 			]
 		],
 		[
+			["$my_var|len", ">", 10  ],
 			["$myobj.version","=","v1.0"]
+		],
+		[
+			["$my_var|len", "<=", 10  ],
+			["$myobj.version","=","v2.0"]
 		]
 	]
 }`

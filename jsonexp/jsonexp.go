@@ -5,27 +5,14 @@
 package jsonexp
 
 import (
-	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
-	"io"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-)
-
-const (
-	postfixLen      = "len"
-	postfixUpper    = "upper"
-	postfixLower    = "lower"
-	postfixFnv32    = "fnv32"
-	postfixFnv64    = "fnv64"
-	postfixMd5Lower = "md5"
-	postfixMd5Upper = "MD5"
 )
 
 type Context interface {
@@ -249,25 +236,48 @@ type Object interface {
 }
 
 type Dictionary struct {
-	varList         map[string]VarFunc
-	varListLock     sync.RWMutex
-	objectList      map[string]Object
-	objectListLock  sync.RWMutex
-	assignList      map[string]AssignFunc
-	assignListLock  sync.RWMutex
-	compareList     map[string]CompareFunc
-	compareListLock sync.RWMutex
+	varList              map[string]VarFunc
+	varListLock          sync.RWMutex
+	objectList           map[string]Object
+	objectListLock       sync.RWMutex
+	assignList           map[string]AssignFunc
+	assignListLock       sync.RWMutex
+	compareList          map[string]CompareFunc
+	compareListLock      sync.RWMutex
+	pipeFunctionList     map[string]PipeFunction
+	pipeFunctionListLock sync.RWMutex
 }
 
 func NewDictionary() *Dictionary {
 	ret := &Dictionary{varList: make(map[string]VarFunc),
-		objectList:  make(map[string]Object),
-		assignList:  make(map[string]AssignFunc),
-		compareList: make(map[string]CompareFunc)}
+		objectList:       make(map[string]Object),
+		assignList:       make(map[string]AssignFunc),
+		compareList:      make(map[string]CompareFunc),
+		pipeFunctionList: make(map[string]PipeFunction),
+	}
+	ret.registerSystemPipeFunction()
 	ret.registerSysemVariants()
 	ret.registerSystemCompares()
 	ret.registerSystemAssign()
 	return ret
+}
+
+func (m *Dictionary) RegisterPipeFunction(name string, fn PipeFunction) {
+	if name == "" || fn == nil {
+		return
+	}
+	m.pipeFunctionListLock.Lock()
+	defer m.pipeFunctionListLock.Unlock()
+	m.pipeFunctionList[name] = fn
+}
+
+func (m *Dictionary) GetPipeFunction(name string) PipeFunction {
+	m.pipeFunctionListLock.RLock()
+	defer m.pipeFunctionListLock.RUnlock()
+	if ret, ok := m.pipeFunctionList[name]; ok {
+		return ret
+	}
+	return nil
 }
 
 func (dict *Dictionary) registerSysemVariants() {
@@ -325,6 +335,16 @@ func (dict *Dictionary) registerSystemAssign() {
 	dict.RegisterAssign("*=", MulAssign)
 	dict.RegisterAssign("/=", DivAssign)
 	dict.RegisterAssign("%=", ModAssign)
+}
+
+func (dict *Dictionary) registerSystemPipeFunction() {
+	dict.RegisterPipeFunction(PipelineFnFnv32, pipeFnFnv32)
+	dict.RegisterPipeFunction(PipelineFnFnv64, pipeFnFnv64)
+	dict.RegisterPipeFunction(PipelineFnLen, pipeFnLen)
+	dict.RegisterPipeFunction(PipelineFnUpper, pipeFnUpper)
+	dict.RegisterPipeFunction(PipelineFnLower, pipeFnLower)
+	dict.RegisterPipeFunction(PipelineFnMd5Lower, pipeFnFnvMd5Lower)
+	dict.RegisterPipeFunction(PipelineFnMd5Upper, pipeFnFnvMd5Upper)
 }
 
 // 注册变量，变量名必须以"$"开头，且不能与object重名
@@ -416,39 +436,19 @@ func (m *Dictionary) getObjectPropertyValue(varName string, context Context) (in
 	}
 }
 
-func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, error) {
-	if varName == "" {
-		return nil, fmt.Errorf("varName is empty")
-	}
-	if len(varName) <= 1 || varName[0] != '$' {
-		return nil, fmt.Errorf("variable name must start with $")
-	}
-	oldVarName := varName
-	fn, ok := m.getVarFunc(varName)
-	usePostfix := false
-	postfix := ""
-	varFound := ok
+func (m *Dictionary) getOriginVarValue(varName string, context Context) (interface{}, error) {
+	fn, varFound := m.getVarFunc(varName)
 	if !varFound {
-		if i := strings.LastIndex(varName, "."); i > 0 {
-			fn, ok = m.getVarFunc(varName[:i])
-			if ok {
-				varFound = true
-				usePostfix = true
-				postfix = varName[i+1:]
-				varName = varName[:i]
-			}
-		}
-	}
-	if !varFound {
-		if ret, err := m.getObjectPropertyValue(oldVarName, context); err == nil {
-			return ret, err
+		if ret, err := m.getObjectPropertyValue(varName, context); err == nil {
+			return ret, nil
 		} else {
-			return nil, fmt.Errorf("variable %s not found", varName)
+			return nil, fmt.Errorf("variable(or object property) %s not found", varName)
 		}
 	}
 
 	var ret interface{}
 	var err error
+	// use value from context first
 	if r, ok := context.GetCtxData(varName); ok {
 		ret = r
 	} else if fn != nil {
@@ -457,49 +457,30 @@ func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	if usePostfix {
-		switch postfix {
-		case postfixLower:
-			if s, ok := GetStringValue(ret); ok {
-				return strings.ToLower(s), nil
-			}
-		case postfixUpper:
-			if s, ok := GetStringValue(ret); ok {
-				return strings.ToUpper(s), nil
-			}
-		case postfixLen:
-			if s, ok := GetStringValue(ret); ok {
-				return len(s), nil
-			}
-		case postfixFnv32:
-			if s, ok := GetStringValue(ret); ok {
-				o := fnv.New32()
-				io.WriteString(o, s)
-				return o.Sum32(), nil
-			}
-		case postfixFnv64:
-			if s, ok := GetStringValue(ret); ok {
-				o := fnv.New64()
-				io.WriteString(o, s)
-				return o.Sum64(), nil
-			}
-		case postfixMd5Lower:
-			if s, ok := GetStringValue(ret); ok {
-				h := md5.New()
-				io.WriteString(h, s)
-				return fmt.Sprintf("%x", h.Sum(nil)), nil
-			}
-		case postfixMd5Upper:
-			if s, ok := GetStringValue(ret); ok {
-				h := md5.New()
-				io.WriteString(h, s)
-				return fmt.Sprintf("%X", h.Sum(nil)), nil
-			}
-		default:
-			return nil, fmt.Errorf("unknown postfix %s", postfix)
-		}
-	}
 	return ret, nil
+}
+
+func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, error) {
+	if varName == "" {
+		return nil, fmt.Errorf("varName is empty")
+	}
+	if len(varName) <= 1 || varName[0] != '$' {
+		return nil, fmt.Errorf("variable name must start with $")
+	}
+	if hasPipeline(varName) {
+		varPipeline, err := newPipeline(varName, m)
+		if err != nil {
+			return nil, err
+		}
+		originValue, err := m.getOriginVarValue(varPipeline.OriginName, context)
+		if err != nil {
+			return nil, err
+		}
+		return varPipeline.Execute(originValue, context)
+	} else {
+		return m.getOriginVarValue(varName, context)
+	}
+
 }
 
 func (m *Dictionary) Compare(compareName string, left string, right interface{}, context Context) (bool, error) {
