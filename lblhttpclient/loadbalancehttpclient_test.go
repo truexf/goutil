@@ -13,9 +13,9 @@ import (
 
 func TestLblHttpClient(t *testing.T) {
 	lblC := NewLoadBalanceClient(MethodMinPending, 10, "hashkey", 0, 0)
-	lblC.AddBackend("127.0.0.1:80", "default1")
-	lblC.AddBackend("127.0.0.1:80", "default2")
-	lblC.AddBackend("127.0.0.1:80", "default3")
+	lblC.AddBackend("127.0.0.1:80", "default1", nil)
+	lblC.AddBackend("127.0.0.1:80", "default2", nil)
+	lblC.AddBackend("127.0.0.1:80", "default3", nil)
 
 	req, _ := http.NewRequest("GET", "http://localhost/status", nil)
 	resp, err := lblC.DoRequest("", req)

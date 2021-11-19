@@ -42,6 +42,7 @@ const (
 
 var (
 	ErrorAliasExists     = errors.New("backend's alias of load balance client exists")
+	ErrorAliasNotExist   = errors.New("backend's alias not found")
 	ErrorJsonExpNotFound = errors.New("jsonexp for target select not found")
 	ErrorNoServerDefined = errors.New("no backend server defined")
 	jsonExpDict          *jsonexp.Dictionary
@@ -63,11 +64,10 @@ func (m *UrlValuesForJsonExp) GetPropertyValue(property string, context jsonexp.
 	return m.UrlValues.Get(property)
 }
 
-type lblHttpBackend struct {
-	pendingRequests int64
-	httpClient      *http.Client
-	addr            string // ip:port
-	alias           string
+type HealthCheck func(req *http.Request, resp *http.Response, err error) bool
+
+func DefaultHealthCheck(req *http.Request, resp *http.Response, err error) bool {
+	return err == nil
 }
 
 func doInit() {
@@ -78,13 +78,30 @@ func doInit() {
 	})
 }
 
-func newLblHttpBackend(addr string, alias string, maxIdleConns int, connTimeout, waitTimeout time.Duration) (*lblHttpBackend, error) {
+type lblHttpBackend struct {
+	pendingRequests      int64
+	healthCheck          HealthCheck
+	healthCheckFailCount int64
+	httpClient           *http.Client
+	addr                 string // ip:port
+	alias                string
+}
+
+func (m *lblHttpBackend) PendingRequests() int64 {
+	return atomic.LoadInt64(&m.pendingRequests) + atomic.LoadInt64(&m.healthCheckFailCount)
+}
+
+func newLblHttpBackend(addr string, alias string, maxIdleConns int, connTimeout, waitTimeout time.Duration, healthCheck HealthCheck) (*lblHttpBackend, error) {
 	if _, err := net.ResolveTCPAddr("tcp4", addr); err != nil {
 		return nil, err
 	}
+	if healthCheck == nil {
+		healthCheck = DefaultHealthCheck
+	}
 	ret := &lblHttpBackend{
-		addr:  addr,
-		alias: alias,
+		healthCheck: healthCheck,
+		addr:        addr,
+		alias:       alias,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
@@ -158,24 +175,11 @@ func (m *LblHttpClient) SetJsonExp(jsonExpJson []byte) error {
 	return nil
 }
 
-func (m *LblHttpClient) GetJsonExp() *jsonexp.JsonExpGroup {
-	m.jsonExpLock.RLock()
-	defer m.jsonExpLock.RUnlock()
-	if m.jsonExpConfig == nil {
-		return nil
-	}
-	if ret, ok := m.jsonExpConfig.GetJsonExpGroup(JsonExpGroupTarget); ok {
-		return ret
-	} else {
-		return nil
-	}
-}
-
-func (m *LblHttpClient) AddBackend(addr string, alias string) error {
+func (m *LblHttpClient) AddBackend(addr string, alias string, healthCheck HealthCheck) error {
 	if _, ok := m.serverMap[alias]; ok {
 		return ErrorAliasExists
 	}
-	backend, err := newLblHttpBackend(addr, alias, m.maxIdleConnectionsPerServer, m.connectTimeout, m.waitResponseTimeout)
+	backend, err := newLblHttpBackend(addr, alias, m.maxIdleConnectionsPerServer, m.connectTimeout, m.waitResponseTimeout, healthCheck)
 	if err != nil {
 		return err
 	}
@@ -188,45 +192,91 @@ func (m *LblHttpClient) AddBackend(addr string, alias string) error {
 	return nil
 }
 
+func (m *LblHttpClient) RemoveBackend(alias string) error {
+	m.serverListLock.Lock()
+	defer m.serverListLock.Unlock()
+	if _, ok := m.serverMap[alias]; ok {
+		delete(m.serverMap, alias)
+		for i, v := range m.serverList {
+			if v.alias == alias {
+				newList := m.serverList[:i]
+				if i != len(m.serverList)-1 {
+					newList = append(newList, m.serverList[i+1:]...)
+				}
+				m.serverList = newList
+			}
+		}
+		return nil
+	} else {
+		return ErrorAliasNotExist
+	}
+}
+
+func (m *LblHttpClient) DoRequest(clientIp string, request *http.Request) (*http.Response, error) {
+	backend, err := m.selectBackend(clientIp, request)
+	if err != nil {
+		return nil, err
+	}
+	request.URL.Host = backend.addr
+	request.Host = backend.addr
+	atomic.AddInt64(&backend.pendingRequests, 1)
+	ret, err := backend.httpClient.Do(request)
+	atomic.AddInt64(&backend.pendingRequests, -1)
+	if !backend.healthCheck(request, ret, err) {
+		atomic.AddInt64(&backend.healthCheckFailCount, 1)
+	} else {
+		atomic.StoreInt64(&backend.healthCheckFailCount, backend.healthCheckFailCount/2)
+	}
+
+	return ret, err
+}
+
+func (m *LblHttpClient) getJsonExp() *jsonexp.JsonExpGroup {
+	m.jsonExpLock.RLock()
+	defer m.jsonExpLock.RUnlock()
+	if m.jsonExpConfig == nil {
+		return nil
+	}
+	if ret, ok := m.jsonExpConfig.GetJsonExpGroup(JsonExpGroupTarget); ok {
+		return ret
+	} else {
+		return nil
+	}
+}
+
 func (m *LblHttpClient) selectBackendRoundrobin() (*lblHttpBackend, error) {
 	idx := atomic.LoadInt64(&m.roundrobinIndex)
 	atomic.AddInt64(&m.roundrobinIndex, 1)
-	m.serverListLock.RLock()
 	idx %= int64(len(m.serverList))
 	ret := m.serverList[idx]
-	m.serverListLock.RUnlock()
 	return ret, nil
 }
 
 func (m *LblHttpClient) selectBackendRandom() (*lblHttpBackend, error) {
-	m.serverListLock.RLock()
 	idx := m.randObj.Intn(len(m.serverList))
 	ret := m.serverList[idx]
-	m.serverListLock.RUnlock()
 	return ret, nil
 }
 
 func (m *LblHttpClient) selectBackendMinPending() (*lblHttpBackend, error) {
 	idx := atomic.LoadInt64(&m.roundrobinIndex)
 	atomic.AddInt64(&m.roundrobinIndex, 1)
-	m.serverListLock.RLock()
 	idx %= int64(len(m.serverList))
 	minIdx := idx
-	minPending := m.serverList[minIdx].pendingRequests
+	minPending := m.serverList[minIdx].PendingRequests()
 	if minPending > 0 {
 		for i := 0; i < len(m.serverList); i++ {
 			idx++
 			if idx >= int64(len(m.serverList)) {
 				idx = 0
 			}
-			pr := m.serverList[idx].pendingRequests
+			pr := m.serverList[idx].PendingRequests()
 			if pr < minPending {
 				minPending = pr
 				minIdx = idx
 			}
 		}
 	}
-	m.serverListLock.RUnlock()
 	return m.serverList[minIdx], nil
 }
 
@@ -234,8 +284,6 @@ func (m *LblHttpClient) selectBackendIpHash(clientIp string) (*lblHttpBackend, e
 	fnv32 := fnv.New32()
 	io.WriteString(fnv32, clientIp)
 	idx := fnv32.Sum32()
-	m.serverListLock.RLock()
-	defer m.serverListLock.RUnlock()
 	idx = idx % uint32(len(m.serverList))
 	return m.serverList[int(idx)], nil
 }
@@ -244,14 +292,12 @@ func (m *LblHttpClient) selectBackendUrlParam(paramValue string) (*lblHttpBacken
 	fnv32 := fnv.New32()
 	io.WriteString(fnv32, paramValue)
 	idx := fnv32.Sum32()
-	m.serverListLock.RLock()
-	defer m.serverListLock.RUnlock()
 	idx = idx % uint32(len(m.serverList))
 	return m.serverList[int(idx)], nil
 }
 
 func (m *LblHttpClient) selectBackendJsonExp() (*lblHttpBackend, error) {
-	jsonExp := m.GetJsonExp()
+	jsonExp := m.getJsonExp()
 	if jsonExp == nil {
 		return nil, ErrorJsonExpNotFound
 	}
@@ -265,8 +311,6 @@ func (m *LblHttpClient) selectBackendJsonExp() (*lblHttpBackend, error) {
 		return nil, ErrorJsonExpNotFound
 	}
 	targetAliasStr, _ := jsonexp.GetStringValue(targetAlias)
-	m.serverListLock.RLock()
-	defer m.serverListLock.RUnlock()
 	if backend, ok := m.serverMap[targetAliasStr]; ok {
 		return backend, nil
 	}
@@ -274,6 +318,8 @@ func (m *LblHttpClient) selectBackendJsonExp() (*lblHttpBackend, error) {
 }
 
 func (m *LblHttpClient) selectBackend(clientIp string, request *http.Request) (*lblHttpBackend, error) {
+	m.serverListLock.RLock()
+	defer m.serverListLock.RUnlock()
 	if len(m.serverList) == 0 {
 		return nil, ErrorNoServerDefined
 	}
@@ -297,17 +343,4 @@ func (m *LblHttpClient) selectBackend(clientIp string, request *http.Request) (*
 	default:
 		return m.selectBackendMinPending()
 	}
-}
-
-func (m *LblHttpClient) DoRequest(clientIp string, request *http.Request) (*http.Response, error) {
-	backend, err := m.selectBackend(clientIp, request)
-	if err != nil {
-		return nil, err
-	}
-	request.URL.Host = backend.addr
-	request.Host = backend.addr
-	atomic.AddInt64(&backend.pendingRequests, 1)
-	ret, err := backend.httpClient.Do(request)
-	atomic.AddInt64(&backend.pendingRequests, -1)
-	return ret, err
 }
