@@ -51,6 +51,17 @@ JSON表达式组是一个由 n个“JSON表达式”组成的json数组，如下
     ]
 ]
 ```
+### 管道
+管道支持对变量进行管道化处理
+格式： $varName[|pipeLineFunction1[|pipeLineFunction2[|...]]]
+举例： 
+```
+[
+    ["$my_var|md5|fnv32",">", 100000],
+    ["$my_var","=", 100000]
+]
+```
+表示“当变量$my_var的md5哈希的fnv32哈希值>100000时，将$my_var的值设置为100000”
 
 ### 系统变量
 表达式中的变量命名必须以$开头，且必须通过Dictionary.RegisterVar进行注册后才可以使用。预定义变量如下： 
