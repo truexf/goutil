@@ -30,10 +30,12 @@ func NewQueue(capacity int, chunkSize int) *Queue {
 
 func (m *Queue) Produce(data interface{}, waitTime time.Duration) error {
 	getIt := false
+	tmr := AcquireTimer(waitTime)
+	defer ReleaseTimer(tmr)
 	select {
 	case m.dataSem <- 1:
 		getIt = true
-	case <-time.After(waitTime):
+	case <-tmr.C:
 	}
 	if !getIt {
 		return fmt.Errorf("queue was full")
@@ -58,10 +60,12 @@ func (m *Queue) Produce(data interface{}, waitTime time.Duration) error {
 
 func (m *Queue) Consume(waitTime time.Duration) (interface{}, error) {
 	getIt := false
+	tmr := AcquireTimer(waitTime)
+	defer ReleaseTimer(tmr)
 	select {
 	case <-m.dataSem:
 		getIt = true
-	case <-time.After(waitTime):
+	case <-tmr.C:
 	}
 	if !getIt {
 		return nil, fmt.Errorf("queue was empty")

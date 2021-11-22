@@ -57,10 +57,12 @@ func (m *RingQueue) PushHead(value interface{}, waitTime time.Duration) error {
 		getIt = false
 	}
 	if !getIt && waitTime > 0 {
+		tmr := AcquireTimer(waitTime)
+		defer ReleaseTimer(tmr)
 		select {
 		case m.queueSem <- 1:
 			getIt = true
-		case <-time.After(waitTime):
+		case <-tmr.C:
 		}
 	}
 	if !getIt {
@@ -88,10 +90,12 @@ func (m *RingQueue) PushTail(value interface{}, waitTime time.Duration) error {
 		getIt = false
 	}
 	if !getIt && waitTime > 0 {
+		tmr := AcquireTimer(waitTime)
+		defer ReleaseTimer(tmr)
 		select {
 		case m.queueSem <- 1:
 			getIt = true
-		case <-time.After(waitTime):
+		case <-tmr.C:
 		}
 	}
 	if !getIt {
@@ -119,10 +123,12 @@ func (m *RingQueue) PopHead(waitTime time.Duration) (interface{}, error) {
 		getIt = false
 	}
 	if !getIt && waitTime > 0 {
+		tmr := AcquireTimer(waitTime)
+		defer ReleaseTimer(tmr)
 		select {
 		case <-m.queueSem:
 			getIt = true
-		case <-time.After(waitTime):
+		case <-tmr.C:
 		}
 	}
 	if !getIt {
@@ -151,10 +157,12 @@ func (m *RingQueue) PopTail(waitTime time.Duration) (interface{}, error) {
 		getIt = false
 	}
 	if !getIt && waitTime > 0 {
+		tmr := AcquireTimer(waitTime)
+		defer ReleaseTimer(tmr)
 		select {
 		case <-m.queueSem:
 			getIt = true
-		case <-time.After(waitTime):
+		case <-tmr.C:
 		}
 	}
 	if !getIt {
