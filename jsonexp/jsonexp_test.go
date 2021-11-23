@@ -81,18 +81,18 @@ var jsonSource string = `{
 	"my_json_exp_group": [
 		[
 			["$rand", ">", 5],
-			["$my_var", "=", "hello world"]
+			["$my_var", "=", "hello world{{$hour}}"]
 		],
 		[
 			["$rand", "<=", 5],
 			[
-				["$my_var", "=", "hello json exp"],
+				["$my_var", "=", "hello json exp-{{$hour}}-"],
 				["$my_var", "+=", " hello go lang"]
 			]
 		],
 		[
 			["$my_var|len", ">", 10  ],
-			["$myobj.version","=","v1.0"]
+			["$myobj.version","=","v1.0.rand:{{$rand}}.time:{{$time}}"]
 		],
 		[
 			["$my_var|len", "<=", 10  ],

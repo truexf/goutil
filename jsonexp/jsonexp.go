@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -246,6 +247,7 @@ type Dictionary struct {
 	compareListLock      sync.RWMutex
 	pipeFunctionList     map[string]PipeFunction
 	pipeFunctionListLock sync.RWMutex
+	regExpMacro          *regexp.Regexp
 }
 
 func NewDictionary() *Dictionary {
@@ -254,6 +256,7 @@ func NewDictionary() *Dictionary {
 		assignList:       make(map[string]AssignFunc),
 		compareList:      make(map[string]CompareFunc),
 		pipeFunctionList: make(map[string]PipeFunction),
+		regExpMacro:      regexp.MustCompile(`\{\{(\$.+?)\}\}`),
 	}
 	ret.registerSystemPipeFunction()
 	ret.registerSysemVariants()
@@ -436,6 +439,26 @@ func (m *Dictionary) getObjectPropertyValue(varName string, context Context) (in
 	}
 }
 
+func (m *Dictionary) replaceMacro(strValueWithMacro string, context Context) string {
+	matchedList := m.regExpMacro.FindAllStringSubmatch(strValueWithMacro, -1)
+	if len(matchedList) == 0 {
+		return strValueWithMacro
+	}
+	ret := strValueWithMacro
+	for _, v := range matchedList {
+		if len(v) != 2 {
+			continue
+		}
+		macroValue, err := m.getOriginVarValue(v[1], context)
+		if err == nil {
+			if macroValueStr, ok := GetStringValue(macroValue); ok {
+				ret = strings.Replace(ret, v[0], macroValueStr, 1)
+			}
+		}
+	}
+	return ret
+}
+
 func (m *Dictionary) getOriginVarValue(varName string, context Context) (interface{}, error) {
 	fn, varFound := m.getVarFunc(varName)
 	if !varFound {
@@ -501,6 +524,9 @@ func (m *Dictionary) Compare(compareName string, left string, right interface{},
 			rightValue, _ = m.GetVarValue(rightStr, context)
 		}
 	}
+	if rightValueStr, ok := rightValue.(string); ok {
+		rightValue = m.replaceMacro(rightValueStr, context)
+	}
 	return fn(leftValue, rightValue, context)
 }
 
@@ -509,8 +535,17 @@ func (m *Dictionary) objectPropertyAssign(left string, right interface{}, contex
 	if len(parts) != 2 {
 		return false
 	}
+	var rightValue interface{} = right
+	if rightStr, ok := right.(string); ok {
+		if len(rightStr) > 1 && rightStr[0] == '$' {
+			rightValue, _ = m.GetVarValue(rightStr, context)
+		}
+	}
+	if rightValueStr, ok := rightValue.(string); ok {
+		rightValue = m.replaceMacro(rightValueStr, context)
+	}
 	if obj, ok := m.getObject(parts[0]); ok {
-		obj.SetPropertyValue(parts[1], right, context)
+		obj.SetPropertyValue(parts[1], rightValue, context)
 		return true
 	}
 	return false
@@ -535,6 +570,9 @@ func (m *Dictionary) Assign(assignName string, left string, right interface{}, c
 		if len(rightStr) > 1 && rightStr[0] == '$' {
 			rightValue, _ = m.GetVarValue(rightStr, context)
 		}
+	}
+	if rightValueStr, ok := rightValue.(string); ok {
+		rightValue = m.replaceMacro(rightValueStr, context)
 	}
 	return fn(left, leftValue, rightValue, context)
 }
