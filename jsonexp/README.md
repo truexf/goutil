@@ -63,6 +63,18 @@ JSON表达式组是一个由 n个“JSON表达式”组成的json数组，如下
 ```
 表示“当变量$my_var的md5哈希的fnv32哈希值>100000时，将$my_var的值设置为100000”
 
+### 宏
+表达式的右值支持宏替换
+宏格式：{{$variant}}  
+举例：  
+```
+[
+    ["$my_var","=", "now: {{$date}}"]
+]
+```
+最终$my_var将被赋值为 now:2021-11-23
+
+
 ### 系统变量
 表达式中的变量命名必须以$开头，且必须通过Dictionary.RegisterVar进行注册后才可以使用。预定义变量如下： 
 * $datetime	string	yyyy-mm-dd hh:nn:ss 
