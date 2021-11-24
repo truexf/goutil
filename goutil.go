@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -26,6 +27,83 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
+
+type Error struct {
+	Code    int
+	Message string
+	Tm      time.Time
+}
+
+func (m *Error) Error() string {
+	return m.Message
+}
+
+type ErrorHolder interface {
+	GetError() error
+	SetError(err error)
+}
+
+type DefaultErrorHolder struct {
+	err error
+}
+
+func (m *DefaultErrorHolder) GetError() error {
+	return m.err
+}
+
+func (m *DefaultErrorHolder) SetError(err error) {
+	m.err = err
+}
+
+type Context interface {
+	GetCtxData(key string) interface{}
+	SetCtxData(key string, value interface{})
+	RemoveCtxData(key string)
+}
+
+type DefaultContext struct {
+	ctx     map[string]interface{}
+	ctxLock sync.RWMutex
+}
+
+func (m *DefaultContext) GetCtxData(key string) interface{} {
+	if key == "" {
+		return nil
+	}
+	m.ctxLock.RLock()
+	defer m.ctxLock.RUnlock()
+	if m.ctx == nil {
+		return nil
+	}
+	if ret, ok := m.ctx[key]; ok {
+		return ret
+	}
+	return nil
+}
+
+func (m *DefaultContext) SetCtxData(key string, value interface{}) {
+	if key == "" {
+		return
+	}
+	m.ctxLock.Lock()
+	defer m.ctxLock.Unlock()
+	if m.ctx == nil {
+		m.ctx = make(map[string]interface{})
+	}
+	m.ctx[key] = value
+}
+
+func (m *DefaultContext) RemoveCtxData(key string) {
+	if key == "" {
+		return
+	}
+	m.ctxLock.Lock()
+	defer m.ctxLock.Unlock()
+	if m.ctx == nil {
+		return
+	}
+	delete(m.ctx, key)
+}
 
 func FileExists(file string) bool {
 	_, err := os.Stat(file)
