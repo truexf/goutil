@@ -38,6 +38,14 @@ func (m *Error) Error() string {
 	return m.Message
 }
 
+func NewError(code int, message string) Error {
+	return Error{Code: code, Message: message, Tm: time.Now()}
+}
+
+func NewErrorf(code int, message string, args ...interface{}) Error {
+	return Error{Code: code, Message: fmt.Sprintf(message, args...), Tm: time.Now()}
+}
+
 type ErrorHolder interface {
 	GetError() error
 	SetError(err error)
