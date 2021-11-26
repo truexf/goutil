@@ -64,37 +64,42 @@ func (m *DefaultErrorHolder) SetError(err error) {
 }
 
 type Context interface {
-	GetCtxData(key string) interface{}
+	GetCtxData(key string) (interface{}, bool)
 	SetCtxData(key string, value interface{})
 	RemoveCtxData(key string)
 }
 
 type DefaultContext struct {
-	ctx     map[string]interface{}
-	ctxLock sync.RWMutex
+	ctx      map[string]interface{}
+	ctxLock  sync.RWMutex
+	WithLock bool
 }
 
-func (m *DefaultContext) GetCtxData(key string) interface{} {
+func (m *DefaultContext) GetCtxData(key string) (interface{}, bool) {
 	if key == "" {
-		return nil
+		return nil, false
 	}
-	m.ctxLock.RLock()
-	defer m.ctxLock.RUnlock()
+	if m.WithLock {
+		m.ctxLock.RLock()
+		defer m.ctxLock.RUnlock()
+	}
 	if m.ctx == nil {
-		return nil
+		return nil, false
 	}
 	if ret, ok := m.ctx[key]; ok {
-		return ret
+		return ret, true
 	}
-	return nil
+	return nil, false
 }
 
 func (m *DefaultContext) SetCtxData(key string, value interface{}) {
 	if key == "" {
 		return
 	}
-	m.ctxLock.Lock()
-	defer m.ctxLock.Unlock()
+	if m.WithLock {
+		m.ctxLock.Lock()
+		defer m.ctxLock.Unlock()
+	}
 	if m.ctx == nil {
 		m.ctx = make(map[string]interface{})
 	}
@@ -105,8 +110,10 @@ func (m *DefaultContext) RemoveCtxData(key string) {
 	if key == "" {
 		return
 	}
-	m.ctxLock.Lock()
-	defer m.ctxLock.Unlock()
+	if m.WithLock {
+		m.ctxLock.Lock()
+		defer m.ctxLock.Unlock()
+	}
 	if m.ctx == nil {
 		return
 	}

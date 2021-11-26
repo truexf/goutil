@@ -14,64 +14,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/truexf/goutil"
 )
 
-type Context interface {
-	GetCtxData(key string) (interface{}, bool)
-	SetCtxData(key string, value interface{})
-	RemoveCtxData(key string)
-}
+type Context = goutil.Context
 
-type DefaultContext struct {
-	ctx      map[string]interface{}
-	ctxLock  sync.RWMutex
-	WithLock bool
-}
-
-func (m *DefaultContext) GetCtxData(key string) (interface{}, bool) {
-	if key == "" {
-		return nil, false
-	}
-	if m.WithLock {
-		m.ctxLock.RLock()
-		defer m.ctxLock.RUnlock()
-	}
-	if m.ctx == nil {
-		return nil, false
-	}
-	if ret, ok := m.ctx[key]; ok {
-		return ret, true
-	}
-	return nil, false
-}
-
-func (m *DefaultContext) SetCtxData(key string, value interface{}) {
-	if key == "" {
-		return
-	}
-	if m.WithLock {
-		m.ctxLock.Lock()
-		defer m.ctxLock.Unlock()
-	}
-	if m.ctx == nil {
-		m.ctx = make(map[string]interface{})
-	}
-	m.ctx[key] = value
-}
-
-func (m *DefaultContext) RemoveCtxData(key string) {
-	if key == "" {
-		return
-	}
-	if m.WithLock {
-		m.ctxLock.Lock()
-		defer m.ctxLock.Unlock()
-	}
-	if m.ctx == nil {
-		return
-	}
-	delete(m.ctx, key)
-}
+type DefaultContext = goutil.DefaultContext
 
 type VarType uint
 

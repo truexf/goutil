@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/truexf/goutil"
 )
 
 type MyObj struct {
@@ -46,7 +48,7 @@ func TestJsonExp(t *testing.T) {
 	if !ok {
 		t.Fatalf("no jsonexp group")
 	}
-	ctx := &DefaultContext{}
+	ctx := &goutil.DefaultContext{}
 	ctx.SetCtxData("$rand", time.Now().Second()%10)
 	g.Execute(ctx)
 	myVar, _ := ctx.GetCtxData("$my_var")
