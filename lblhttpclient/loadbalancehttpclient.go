@@ -297,13 +297,15 @@ func (m *LblHttpClient) selectBackendUrlParam(paramValue string) (*lblHttpBacken
 	return m.serverList[int(idx)], nil
 }
 
-func (m *LblHttpClient) selectBackendJsonExp() (*lblHttpBackend, error) {
+func (m *LblHttpClient) selectBackendJsonExp(request *http.Request) (*lblHttpBackend, error) {
 	jsonExp := m.getJsonExp()
 	if jsonExp == nil {
 		return nil, ErrorJsonExpNotFound
 	}
 
 	context := &jsonexp.DefaultContext{WithLock: false}
+	u := request.URL
+	jsonExpDict.RegisterObjectInContext(JsonExpObjectURI, &UrlValuesForJsonExp{Path: u.Path, UrlValues: u.Query()}, context)
 	if err := jsonExp.Execute(context); err != nil {
 		return nil, err
 	}
@@ -321,6 +323,7 @@ func (m *LblHttpClient) selectBackendJsonExp() (*lblHttpBackend, error) {
 func (m *LblHttpClient) selectBackend(clientIp string, request *http.Request) (*lblHttpBackend, error) {
 	m.serverListLock.RLock()
 	defer m.serverListLock.RUnlock()
+
 	if len(m.serverList) == 0 {
 		return nil, ErrorNoServerDefined
 	}
@@ -338,9 +341,7 @@ func (m *LblHttpClient) selectBackend(clientIp string, request *http.Request) (*
 		paramValue := u.Query().Get(m.methodUrlParamKey)
 		return m.selectBackendUrlParam(paramValue)
 	case MethodJsonExp:
-		u := request.URL
-		jsonExpDict.RegisterObject(JsonExpObjectURI, &UrlValuesForJsonExp{Path: u.Path, UrlValues: u.Query()})
-		return m.selectBackendJsonExp()
+		return m.selectBackendJsonExp(request)
 	default:
 		return m.selectBackendMinPending()
 	}

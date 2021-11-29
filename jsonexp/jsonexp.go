@@ -327,6 +327,10 @@ func (m *Dictionary) RegisterObject(objectName string, object Object) error {
 	return nil
 }
 
+func (m *Dictionary) RegisterObjectInContext(objectName string, object Object, context Context) {
+	context.SetCtxData(objectName, object)
+}
+
 // 注册条件运算符
 func (m *Dictionary) RegisterCompare(compareName string, compareFunc CompareFunc) {
 	if compareName == "" || compareFunc == nil {
@@ -361,6 +365,16 @@ func (m *Dictionary) getObject(objName string) (Object, bool) {
 	return ret, ok
 }
 
+func (m *Dictionary) getObjectFromContext(objName string, context Context) (Object, bool) {
+	ret, ok := context.GetCtxData(objName)
+	if ok {
+		if reto, ok := ret.(Object); ok {
+			return reto, true
+		}
+	}
+	return nil, false
+}
+
 func (m *Dictionary) getCompareFunc(compareName string) (CompareFunc, bool) {
 	m.compareListLock.RLock()
 	defer m.compareListLock.RUnlock()
@@ -380,6 +394,9 @@ func (m *Dictionary) getObjectPropertyValue(varName string, context Context) (in
 	parts := strings.Split(varName, ".")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("not object.property")
+	}
+	if obj, ok := m.getObjectFromContext(parts[0], context); ok {
+		return obj.GetPropertyValue(parts[1], context), nil
 	}
 	if obj, ok := m.getObject(parts[0]); ok {
 		return obj.GetPropertyValue(parts[1], context), nil
@@ -492,6 +509,11 @@ func (m *Dictionary) objectPropertyAssign(left string, right interface{}, contex
 	}
 	if rightValueStr, ok := rightValue.(string); ok {
 		rightValue = m.replaceMacro(rightValueStr, context)
+	}
+
+	if obj, ok := m.getObjectFromContext(parts[0], context); ok {
+		obj.SetPropertyValue(parts[1], rightValue, context)
+		return true
 	}
 	if obj, ok := m.getObject(parts[0]); ok {
 		obj.SetPropertyValue(parts[1], rightValue, context)
