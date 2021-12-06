@@ -116,6 +116,9 @@ func NewLRUFileCache(fileSizeLimit int64, cacheSizeLimit int64) *LRUFileCache {
 		fileSizeLimit:  fileSizeLimit,
 		cacheSizeLimit: cacheSizeLimit,
 	}
+	if ret.cacheSizeLimit < ret.fileSizeLimit {
+		ret.cacheSizeLimit = ret.fileSizeLimit * 1000
+	}
 
 	return ret
 }
