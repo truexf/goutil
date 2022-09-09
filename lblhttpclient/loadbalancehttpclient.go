@@ -260,8 +260,7 @@ func (m *LblHttpClient) selectBackendRandom() (*lblHttpBackend, error) {
 }
 
 func (m *LblHttpClient) selectBackendMinPending() (*lblHttpBackend, error) {
-	idx := atomic.LoadInt64(&m.roundrobinIndex)
-	atomic.AddInt64(&m.roundrobinIndex, 1)
+	idx := atomic.AddInt64(&m.roundrobinIndex, 1) - 1
 	idx %= int64(len(m.serverList))
 	minIdx := idx
 	minPending := m.serverList[minIdx].PendingRequests()
