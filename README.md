@@ -9,7 +9,7 @@ golang util
 双向链表， 支持线程安全和非安全，最大化满足性能要求
 
 ### [queue](https://github.com/truexf/goutil/tree/master/queue.go)
-分段式slice，在内存分配和性能之间取得平衡，类似c++ stl的dequeue
+分段式slice，在内存分配和性能之间取得平衡，类似c++ stl的deque
 
 ### [ring_queue](https://github.com/truexf/goutil/tree/master/ring_queue.go)
 环形队列
