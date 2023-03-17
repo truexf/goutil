@@ -1,3 +1,6 @@
+// 线程安全、持久化的map
+// 包含一个持久化的map和一个先进先出的队列
+// fangyousong 2023/3/17
 package goutil
 
 import (
@@ -143,6 +146,7 @@ func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool) 
 	return nil
 }
 
+// FIFO queue
 func (m *FileMap) Pop(waitTimeout time.Duration) (retKey string, timeout bool) {
 	m.RLock()
 	defer m.RUnlock()
@@ -152,7 +156,7 @@ func (m *FileMap) Pop(waitTimeout time.Duration) (retKey string, timeout bool) {
 		case ret := <-m.keyQueue:
 			return ret, false
 		default:
-			return "", false
+			return "", true
 		}
 	} else {
 		select {
@@ -308,15 +312,7 @@ func (m *FileMap) loadDataFromFile(deleted map[string]struct{}) {
 	}
 }
 
-func (m *FileMap) clear() {
-	// close all fd
-	m.fd.Close()
-	m.fd = nil
-	m.fdSize = 0
-	m.fdDeleted.Close()
-	m.fdDeleted = nil
-	m.fdDeletedSize = 0
-
+func (m *FileMap) clearFiles() {
 	// clear files
 	des, err := os.ReadDir(m.filePath)
 	if err != nil {
@@ -332,4 +328,17 @@ func (m *FileMap) clear() {
 		}
 		os.Remove(filepath.Join(m.filePath, de.Name()))
 	}
+}
+
+func (m *FileMap) clear() {
+	// close all fd
+	m.fd.Close()
+	m.fd = nil
+	m.fdSize = 0
+	m.fdDeleted.Close()
+	m.fdDeleted = nil
+	m.fdDeletedSize = 0
+
+	// clear files
+	m.clearFiles()
 }
