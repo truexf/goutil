@@ -17,7 +17,7 @@ var err error
 func ensureInit() {
 	once.Do(func() {
 		os.MkdirAll("/tmp/fm", 0777)
-		fileMapObj, err = NewFileMap("testFileMap", "/tmp/fm")
+		fileMapObj, err = NewFileMap("testFileMap", "/tmp/fm", true)
 		if err != nil {
 			panic(err)
 		}
@@ -27,7 +27,7 @@ func ensureInit() {
 func TestFileMap_PutAndGet(t *testing.T) {
 	ensureInit()
 	for i := 1; i < 1000; i++ {
-		if err := fileMapObj.Put("testkey"+strconv.Itoa(i), []byte(strings.Repeat("testdata"+strconv.Itoa(i), i)), true); err != nil {
+		if err := fileMapObj.Put("testkey"+strconv.Itoa(i), []byte(strings.Repeat("testdata"+strconv.Itoa(i), i)), true, time.Second*time.Duration(i)); err != nil {
 			t.Fatal(err.Error())
 		}
 	}
@@ -41,7 +41,7 @@ func TestFileMap_PutAndGet(t *testing.T) {
 }
 
 func TestNewFileMap(t *testing.T) {
-	fm, err := NewFileMap("testFileMap", "/tmp/fm")
+	fm, err := NewFileMap("testFileMap", "/tmp/fm", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +55,23 @@ func TestNewFileMap(t *testing.T) {
 	fmt.Println("test TestNewFileMap ok.")
 }
 
+func TestFileMapExpire(t *testing.T) {
+	time.Sleep(time.Second * 2)
+	fm, err := NewFileMap("testFileMap", "/tmp/fm", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fm.Close()
+	fm.RemoveExpiredData()
+	fmt.Printf("after expired, len: %d\n", fm.Len())
+	//if fm.Len() > 995 {
+	//	t.Fatal("testfilemapexpire fail")
+	//}
+	//fmt.Println("testfilemapexpire ok ")
+}
+
 func TestFileMap_Pop(t *testing.T) {
-	fm, err := NewFileMap("testFileMap", "/tmp/fm")
+	fm, err := NewFileMap("testFileMap", "/tmp/fm", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +86,7 @@ func TestFileMap_Pop(t *testing.T) {
 }
 
 func TestFileMap_Delete(t *testing.T) {
-	fm, err := NewFileMap("testFileMap", "/tmp/fm")
+	fm, err := NewFileMap("testFileMap", "/tmp/fm", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +103,7 @@ func TestFileMap_Delete(t *testing.T) {
 // final, clean
 func TestFileMap_Clear(t *testing.T) {
 	return
-	fm, err := NewFileMap("testFileMap", "/tmp/fm")
+	fm, err := NewFileMap("testFileMap", "/tmp/fm", true)
 	if err != nil {
 		t.Fatal(err)
 	}

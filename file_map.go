@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,7 +30,7 @@ type FileMap struct {
 	fdDeletedSize int64
 }
 
-func NewFileMap(tag string, filePath string) (*FileMap, error) {
+func NewFileMap(tag string, filePath string, enableKeyQueue bool) (*FileMap, error) {
 	if tag == "" || filePath == "" {
 		return nil, fmt.Errorf("invalid param")
 	}
@@ -40,7 +41,9 @@ func NewFileMap(tag string, filePath string) (*FileMap, error) {
 		tag:      tag,
 		filePath: filePath,
 		dataMap:  make(map[string][]byte),
-		keyQueue: make(chan string, 10000000),
+	}
+	if enableKeyQueue {
+		ret.keyQueue = make(chan string, 10000000)
 	}
 	deleted := ret.loadDeletedKeysFromFile()
 	ret.loadDataFromFile(deleted)
@@ -54,6 +57,11 @@ func (m *FileMap) Flush() {
 	if m.fd != nil {
 		m.fd.Sync()
 	}
+}
+func (m *FileMap) Len() int {
+	m.RLock()
+	defer m.RUnlock()
+	return len(m.dataMap)
 }
 func (m *FileMap) Close() {
 	m.Lock()
@@ -83,10 +91,20 @@ func (m *FileMap) getNextFileName(fileType string) (string, error) {
 	}
 }
 
-func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool) error {
+func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool, liveDuration time.Duration) error {
 	if key == "" || len(packedJsonData) == 0 {
 		return fmt.Errorf("invalid key or data")
 	}
+	if liveDuration > time.Hour*24*7 {
+		return fmt.Errorf("live time too long")
+	}
+	if liveDuration <= 0 {
+		return fmt.Errorf("live time too long")
+	}
+
+	putData := append(packedJsonData, '|')
+	deadLine := fmt.Sprintf("%d", time.Now().Add(liveDuration).Unix())
+	putData = append(putData, []byte(deadLine)...)
 
 	m.Lock()
 	defer m.Unlock()
@@ -95,16 +113,18 @@ func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool) 
 	_, exists := m.dataMap[key]
 	if exists {
 		if overrideIfExists {
-			m.dataMap[key] = packedJsonData
+			m.dataMap[key] = putData
 		} else {
 			return fmt.Errorf("key exists")
 		}
 	} else {
-		m.dataMap[key] = packedJsonData
+		m.dataMap[key] = putData
 	}
 
 	// write key queue
-	m.keyQueue <- key
+	if m.keyQueue != nil {
+		m.keyQueue <- key
+	}
 
 	// write file
 	if m.fd != nil {
@@ -131,12 +151,12 @@ func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool) 
 	m.fdSize++
 	writedBytes := 0
 	for {
-		n, err := m.fd.Write(packedJsonData[writedBytes:])
+		n, err := m.fd.Write(putData[writedBytes:])
 		if n > 0 {
 			writedBytes += n
 			m.fdSize += int64(n)
 		}
-		if err != nil || len(packedJsonData) == writedBytes {
+		if err != nil || len(putData) == writedBytes {
 			break
 		}
 	}
@@ -148,6 +168,9 @@ func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool) 
 
 // FIFO queue
 func (m *FileMap) Pop(waitTimeout time.Duration) (retKey string, timeout bool) {
+	if m.keyQueue == nil {
+		return "", false
+	}
 	m.RLock()
 	defer m.RUnlock()
 
@@ -165,6 +188,35 @@ func (m *FileMap) Pop(waitTimeout time.Duration) (retKey string, timeout bool) {
 		case <-time.After(waitTimeout):
 			return "", true
 		}
+	}
+}
+
+func (m *FileMap) RemoveExpiredData() {
+	m.Lock()
+	defer m.Unlock()
+
+	toDelete := make([]string, 0, 1024)
+	tmNow := time.Now()
+	for k, v := range m.dataMap {
+		idx := bytes.LastIndexByte(v, '|')
+		if idx >= 0 {
+			u := string(v[idx+1:])
+			ut, err := strconv.Atoi(u)
+			if err != nil {
+				toDelete = append(toDelete, k)
+				continue
+			}
+			tmDeadLine := time.Unix(int64(ut), 0)
+			if tmNow.After(tmDeadLine) {
+				toDelete = append(toDelete, k)
+			}
+		}
+	}
+	for _, k := range toDelete {
+		delete(m.dataMap, k)
+	}
+	if len(m.dataMap) == 0 {
+		m.clear()
 	}
 }
 
@@ -218,6 +270,10 @@ func (m *FileMap) Get(key string) []byte {
 	defer m.RUnlock()
 
 	if ret, ok := m.dataMap[key]; ok {
+		idx := bytes.LastIndexByte(ret, '|')
+		if idx >= 0 {
+			ret = ret[:idx]
+		}
 		return ret
 	}
 	return nil
@@ -301,7 +357,9 @@ func (m *FileMap) loadDataFromFile(deleted map[string]struct{}) {
 				data := s[idx+1:]
 				if _, ok := deleted[key]; !ok {
 					m.dataMap[key] = data
-					m.keyQueue <- key
+					if m.keyQueue != nil {
+						m.keyQueue <- key
+					}
 				}
 			}
 			if err != nil {
