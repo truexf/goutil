@@ -213,20 +213,14 @@ func (m *FileMap) RemoveExpiredData() {
 		}
 	}
 	for _, k := range toDelete {
-		delete(m.dataMap, k)
+		m.deleteNoLock(k)
 	}
 	if len(m.dataMap) == 0 {
 		m.clear()
 	}
 }
 
-func (m *FileMap) Delete(key string) {
-	if key == "" {
-		return
-	}
-	m.Lock()
-	defer m.Unlock()
-
+func (m *FileMap) deleteNoLock(key string) {
 	// delete from map
 	delete(m.dataMap, key)
 
@@ -259,6 +253,15 @@ func (m *FileMap) Delete(key string) {
 	if len(m.dataMap) == 0 {
 		m.clear()
 	}
+}
+
+func (m *FileMap) Delete(key string) {
+	if key == "" {
+		return
+	}
+	m.Lock()
+	defer m.Unlock()
+	m.deleteNoLock(key)
 }
 
 func (m *FileMap) Get(key string) []byte {
