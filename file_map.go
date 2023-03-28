@@ -57,6 +57,9 @@ func (m *FileMap) Flush() {
 	if m.fd != nil {
 		m.fd.Sync()
 	}
+	if m.fdDeleted != nil {
+		m.fdDeleted.Sync()
+	}
 }
 func (m *FileMap) Len() int {
 	m.RLock()

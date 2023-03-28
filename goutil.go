@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
@@ -734,3 +735,38 @@ func GetExeName() string {
 	exePath, _ = filepath.EvalSymlinks(exePath)
 	return filepath.Base(exePath)
 }
+
+func UnsafeStringToBytes(s string) []byte {
+	str := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	by := reflect.SliceHeader{
+		Data: str.Data,
+		Len:  str.Len,
+		Cap:  str.Len,
+	}
+	//在把by从sliceheader转为[]byte类型
+	return *(*[]byte)(unsafe.Pointer(&by))
+}
+
+func UnsafeByteToString(b []byte) string {
+	by := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+
+	str := reflect.StringHeader{
+		Data: by.Data,
+		Len:  by.Len,
+	}
+	return *(*string)(unsafe.Pointer(&str))
+}
+
+// 文件列表按修改时间从新到旧排序
+type FileInfoListModTimeDesc []os.FileInfo
+
+func (p FileInfoListModTimeDesc) Len() int           { return len(p) }
+func (p FileInfoListModTimeDesc) Less(i, j int) bool { return p[i].ModTime().After(p[j].ModTime()) }
+func (p FileInfoListModTimeDesc) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+// 文件列表按修改时间从旧到新排序
+type FileInfoListModTimeAsc []os.FileInfo
+
+func (p FileInfoListModTimeAsc) Len() int           { return len(p) }
+func (p FileInfoListModTimeAsc) Less(i, j int) bool { return p[i].ModTime().Before(p[j].ModTime()) }
+func (p FileInfoListModTimeAsc) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
