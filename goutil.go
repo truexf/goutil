@@ -143,12 +143,11 @@ func FileModTime(file string) string {
 }
 
 func SplitLR(s string, separator string) (l string, r string) {
-	ret := strings.Split(s, separator)
-	if len(ret) == 1 {
-		return ret[0], ""
-	} else {
-		return ret[0], strings.Join(ret[1:], separator)
+	idx := strings.Index(s, separator)
+	if idx < 0 {
+		return s, ""
 	}
+	return s[:idx], s[idx+1:]
 }
 
 func SplitByLine(s string) (ret []string) {
@@ -212,7 +211,7 @@ func BytesMd5(b []byte) (string, error) {
 }
 
 func StringMd5(s string) (string, error) {
-	return BytesMd5([]byte(s))
+	return BytesMd5(UnsafeStringToBytes(s))
 }
 
 func Md5(b []byte) ([]byte, error) {
@@ -557,7 +556,7 @@ func (m *JsonInt) UnmarshalJSON(bts []byte) error {
 	if e == b {
 		e++
 	}
-	i, err := strconv.Atoi(string(bts[b:e]))
+	i, err := strconv.Atoi(UnsafeBytesToString(bts[b:e]))
 	if err != nil {
 		*m = 0
 	} else {
@@ -605,7 +604,7 @@ func (m *JsonFloat64) UnmarshalJSON(bts []byte) error {
 	if e == b {
 		e++
 	}
-	f, err := strconv.ParseFloat(string(bts[b:e]), 64)
+	f, err := strconv.ParseFloat(UnsafeBytesToString(bts[b:e]), 64)
 	if err != nil {
 		*m = 0
 	} else {
