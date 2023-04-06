@@ -8,6 +8,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 	"io"
 	"io/ioutil"
 	"log"
@@ -24,9 +26,6 @@ import (
 	"time"
 	"unicode/utf8"
 	"unsafe"
-
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
 )
 
 type Error struct {
@@ -736,25 +735,17 @@ func GetExeName() string {
 	return filepath.Base(exePath)
 }
 
-func UnsafeStringToBytes(s string) []byte {
-	str := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	by := reflect.SliceHeader{
-		Data: str.Data,
-		Len:  str.Len,
-		Cap:  str.Len,
-	}
-	//在把by从sliceheader转为[]byte类型
-	return *(*[]byte)(unsafe.Pointer(&by))
+func UnsafeStringToBytes(s string) (b []byte) {
+	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	bh.Data = sh.Data
+	bh.Cap = sh.Len
+	bh.Len = sh.Len
+	return b
 }
 
-func UnsafeByteToString(b []byte) string {
-	by := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-
-	str := reflect.StringHeader{
-		Data: by.Data,
-		Len:  by.Len,
-	}
-	return *(*string)(unsafe.Pointer(&str))
+func UnsafeBytesToString(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
 }
 
 // 文件列表按修改时间从新到旧排序
