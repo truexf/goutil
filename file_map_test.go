@@ -27,12 +27,12 @@ func ensureInit() {
 func TestFileMap_PutAndGet(t *testing.T) {
 	ensureInit()
 	for i := 1; i < 1000; i++ {
-		if err := fileMapObj.Put("testkey"+strconv.Itoa(i), []byte(strings.Repeat("testdata"+strconv.Itoa(i), i)), true, time.Second*time.Duration(i)); err != nil {
+		if err := fileMapObj.Put("testkey"+strconv.Itoa(i), UnsafeStringToBytes(strings.Repeat("testdata"+strconv.Itoa(i), i)), true, time.Second*time.Duration(i)); err != nil {
 			t.Fatal(err.Error())
 		}
 	}
 	for i := 1; i < 1000; i++ {
-		if string(fileMapObj.Get("testkey"+strconv.Itoa(i))) != strings.Repeat("testdata"+strconv.Itoa(i), i) {
+		if UnsafeBytesToString(fileMapObj.Get("testkey"+strconv.Itoa(i))) != strings.Repeat("testdata"+strconv.Itoa(i), i) {
 			t.Fatal("get is not equal for put")
 		}
 	}
@@ -47,7 +47,7 @@ func TestNewFileMap(t *testing.T) {
 	}
 	defer fm.Close()
 	for i := 1; i < 1000; i++ {
-		if string(fm.Get("testkey"+strconv.Itoa(i))) != strings.Repeat("testdata"+strconv.Itoa(i), i) {
+		if UnsafeBytesToString(fm.Get("testkey"+strconv.Itoa(i))) != strings.Repeat("testdata"+strconv.Itoa(i), i) {
 			t.Fatal("get is not equal for put")
 		}
 	}
@@ -93,7 +93,7 @@ func TestFileMap_Delete(t *testing.T) {
 	defer fm.Close()
 	for i := 1; i < 1000; i++ {
 		fm.Delete("testkey" + strconv.Itoa(i))
-		if string(fm.Get("testkey"+strconv.Itoa(i))) == strings.Repeat("testdata"+strconv.Itoa(i), i) {
+		if UnsafeBytesToString(fm.Get("testkey"+strconv.Itoa(i))) == strings.Repeat("testdata"+strconv.Itoa(i), i) {
 			t.Fatal("get ok after delete")
 		}
 	}

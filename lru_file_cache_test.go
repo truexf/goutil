@@ -10,7 +10,7 @@ import (
 )
 
 func TestLRUFileCache(t *testing.T) {
-	data := bytes.Repeat([]byte("a"), 200)
+	data := bytes.Repeat([]byte{'a'}, 200)
 	for i := 0; i < 100; i++ {
 		fn := fmt.Sprintf("/tmp/LRUTEST%d", i)
 		os.WriteFile(fn, data, 0666)
@@ -49,6 +49,6 @@ func TestLRUFileCache(t *testing.T) {
 
 	s := cache.GetStatis()
 	bts, _ := json.Marshal(s)
-	fmt.Println(string(bts))
+	fmt.Println(UnsafeBytesToString(bts))
 	fmt.Println("TestLRUFileCache ok")
 }

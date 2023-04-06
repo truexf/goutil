@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/truexf/goutil"
 	"time"
 
 	"github.com/truexf/goutil/jsonexp"
@@ -10,7 +11,7 @@ import (
 func main() {
 	dict := jsonexp.NewDictionary()
 	dict.RegisterVar("$my_var", nil)
-	cfg, err := jsonexp.NewConfiguration([]byte(jsonSource), dict)
+	cfg, err := jsonexp.NewConfiguration(goutil.UnsafeStringToBytes(jsonSource), dict)
 	if err != nil {
 		fmt.Println(err.Error())
 	}

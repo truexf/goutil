@@ -107,7 +107,7 @@ func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool, 
 
 	putData := append(packedJsonData, '|')
 	deadLine := fmt.Sprintf("%d", time.Now().Add(liveDuration).Unix())
-	putData = append(putData, []byte(deadLine)...)
+	putData = append(putData, UnsafeStringToBytes(deadLine)...)
 
 	m.Lock()
 	defer m.Unlock()
@@ -148,9 +148,9 @@ func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool, 
 		}
 		m.fdSize = 0
 	}
-	n, _ := m.fd.Write([]byte(key))
+	n, _ := m.fd.Write(UnsafeStringToBytes(key))
 	m.fdSize += int64(n)
-	m.fd.Write([]byte("\000"))
+	m.fd.Write([]byte{'\000'})
 	m.fdSize++
 	writedBytes := 0
 	for {
@@ -163,7 +163,7 @@ func (m *FileMap) Put(key string, packedJsonData []byte, overrideIfExists bool, 
 			break
 		}
 	}
-	m.fd.Write([]byte("\n"))
+	m.fd.Write([]byte{'\n'})
 	m.fdSize++
 
 	return nil
@@ -246,11 +246,11 @@ func (m *FileMap) deleteNoLock(key string) {
 		}
 		m.fdDeletedSize = 0
 	}
-	n, _ := m.fdDeleted.Write([]byte(key))
+	n, _ := m.fdDeleted.Write(UnsafeStringToBytes(key))
 	if n > 0 {
 		m.fdDeletedSize += int64(n)
 	}
-	m.fdDeleted.Write([]byte("\n"))
+	m.fdDeleted.Write([]byte{'\n'})
 	m.fdDeletedSize++
 
 	if len(m.dataMap) == 0 {

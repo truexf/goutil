@@ -27,7 +27,7 @@ func TestJsonExp(t *testing.T) {
 	dict.RegisterVar("$my_var", nil)
 	myobj := &MyObj{}
 	dict.RegisterObject("$myobj", myobj)
-	cfg, err := NewConfiguration([]byte(jsonSource), dict)
+	cfg, err := NewConfiguration(goutil.UnsafeStringToBytes(jsonSource), dict)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -59,7 +59,7 @@ func TestJsonExp(t *testing.T) {
 func BenchmarkJsonExp(b *testing.B) {
 	dict := NewDictionary()
 	dict.RegisterVar("$my_var", nil)
-	cfg, err := NewConfiguration([]byte(jsonSource), dict)
+	cfg, err := NewConfiguration(goutil.UnsafeStringToBytes(jsonSource), dict)
 	if err != nil {
 		b.Fatalf(err.Error())
 	}

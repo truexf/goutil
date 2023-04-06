@@ -6,6 +6,7 @@ package lblhttpclient
 
 import (
 	"fmt"
+	"github.com/truexf/goutil"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -73,7 +74,7 @@ func TestLblHttpClientUrlparam(t *testing.T) {
 
 func TestLblHttpClientJsonExp(t *testing.T) {
 	lblC := NewLoadBalanceClient(MethodJsonExp, 10, "hashkey", 0, 0)
-	lblC.SetJsonExp([]byte(jsExpString))
+	lblC.SetJsonExp(goutil.UnsafeStringToBytes(jsExpString))
 	lblC.AddBackend("127.0.0.1:81", "default1", nil)
 	lblC.AddBackend("127.0.0.1:80", "default2", nil)
 	lblC.AddBackend("127.0.0.1:80", "default3", nil)
@@ -86,7 +87,7 @@ func TestLblHttpClientJsonExp(t *testing.T) {
 
 func BenchmarkJsonExp(b *testing.B) {
 	lblC := NewLoadBalanceClient(MethodJsonExp, 10, "hashkey", 0, 0)
-	lblC.SetJsonExp([]byte(jsExpString))
+	lblC.SetJsonExp(goutil.UnsafeStringToBytes(jsExpString))
 	lblC.AddBackend("127.0.0.1:81", "default1", nil)
 	lblC.AddBackend("127.0.0.1:80", "default2", nil)
 	lblC.AddBackend("127.0.0.1:80", "default3", nil)

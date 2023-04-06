@@ -6,6 +6,7 @@ package jsonexp
 
 import (
 	"fmt"
+	"github.com/truexf/goutil"
 	"math/rand"
 	"regexp"
 	"strconv"
@@ -85,7 +86,7 @@ var Rand = func(context Context) (interface{}, error) {
 	return rand.Intn(100) + 1, nil
 }
 
-//compares
+// compares
 var NotCover = func(L, R interface{}, context Context) (bool, error) {
 	ret, err := Cover(L, R, context)
 	if err != nil {
@@ -149,7 +150,7 @@ var RegExpMatch = func(L, R interface{}, context Context) (bool, error) {
 		return false, nil
 	}
 
-	if matched, err := regexp.Match(r, []byte(l)); err == nil {
+	if matched, err := regexp.Match(r, goutil.UnsafeStringToBytes(l)); err == nil {
 		return matched, nil
 	} else {
 		return false, err
@@ -559,7 +560,7 @@ var More = func(L, R interface{}, context Context) (bool, error) {
 	return false, nil
 }
 
-//assign functions
+// assign functions
 var Assign = func(L string, lValue interface{}, R interface{}, ret Context) error {
 	if ret == nil {
 		return fmt.Errorf("param ret is nil")
