@@ -455,18 +455,14 @@ func (m *Dictionary) getOriginVarValue(varName string, context Context) (interfa
 	return ret, nil
 }
 
-func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, error) {
+func (m *Dictionary) GetVarValue(varName string, varPipeline *pipeline, context Context) (interface{}, error) {
 	if varName == "" {
 		return nil, fmt.Errorf("varName is empty")
 	}
 	if len(varName) <= 1 || varName[0] != '$' {
 		return nil, fmt.Errorf("variable name must start with $")
 	}
-	if hasPipeline(varName) {
-		varPipeline, err := newPipeline(varName, m)
-		if err != nil {
-			return nil, err
-		}
+	if varPipeline != nil {
 		originValue, err := m.getOriginVarValue(varPipeline.OriginName, context)
 		if err != nil {
 			return nil, err
@@ -478,22 +474,19 @@ func (m *Dictionary) GetVarValue(varName string, context Context) (interface{}, 
 
 }
 
-func (m *Dictionary) Compare(compareName string, left string, right interface{}, context Context) (bool, error) {
-	if compareName == "" {
-		return false, fmt.Errorf("compare name is empty")
-	}
-	fn, ok := m.getCompareFunc(compareName)
+func (m *Dictionary) compare(cmpExp *CompareExp, context Context) (bool, error) {
+	fn, ok := m.getCompareFunc(cmpExp.CompareName)
 	if !ok {
-		return false, fmt.Errorf("compare name %s not found", compareName)
+		return false, fmt.Errorf("compare name %s not found", cmpExp.CompareName)
 	}
-	var leftValue interface{} = left
-	var rightValue interface{} = right
-	if len(left) > 1 && left[0] == '$' {
-		leftValue, _ = m.GetVarValue(left, context)
+	var leftValue interface{} = cmpExp.Left
+	var rightValue interface{} = cmpExp.Right
+	if len(cmpExp.Left) > 1 && cmpExp.Left[0] == '$' {
+		leftValue, _ = m.GetVarValue(cmpExp.Left, cmpExp.LeftPipeLine, context)
 	}
-	if rightStr, ok := right.(string); ok {
+	if rightStr, ok := cmpExp.Right.(string); ok {
 		if len(rightStr) > 1 && rightStr[0] == '$' {
-			rightValue, _ = m.GetVarValue(rightStr, context)
+			rightValue, _ = m.GetVarValue(rightStr, cmpExp.RightPipeLine, context)
 		}
 	}
 	if rightValueStr, ok := rightValue.(string); ok {
@@ -502,15 +495,15 @@ func (m *Dictionary) Compare(compareName string, left string, right interface{},
 	return fn(leftValue, rightValue, context)
 }
 
-func (m *Dictionary) objectPropertyAssign(left string, right interface{}, context Context) bool {
-	parts := strings.Split(left, ".")
+func (m *Dictionary) objectPropertyAssign(assignExp *AssignExp, context Context) bool {
+	parts := strings.Split(assignExp.Left, ".")
 	if len(parts) != 2 {
 		return false
 	}
-	var rightValue interface{} = right
-	if rightStr, ok := right.(string); ok {
+	var rightValue = assignExp.Right
+	if rightStr, ok := assignExp.Right.(string); ok {
 		if len(rightStr) > 1 && rightStr[0] == '$' {
-			rightValue, _ = m.GetVarValue(rightStr, context)
+			rightValue, _ = m.GetVarValue(rightStr, assignExp.RightPipeLine, context)
 		}
 	}
 	if rightValueStr, ok := rightValue.(string); ok {
@@ -528,30 +521,26 @@ func (m *Dictionary) objectPropertyAssign(left string, right interface{}, contex
 	return false
 }
 
-func (m *Dictionary) Assign(assignName string, left string, right interface{}, context Context) error {
-	if assignName == "" {
-		return fmt.Errorf("assign name is empty")
-	}
-
-	if assignName == "=" && m.objectPropertyAssign(left, right, context) {
+func (m *Dictionary) assign(assignExp *AssignExp, context Context) error {
+	if assignExp.AssignName == "=" && m.objectPropertyAssign(assignExp, context) {
 		return nil
 	}
 
-	fn, ok := m.getAssignFunc(assignName)
+	fn, ok := m.getAssignFunc(assignExp.AssignName)
 	if !ok {
-		return fmt.Errorf("assign name %s not found", assignName)
+		return fmt.Errorf("assign name %s not found", assignExp.AssignName)
 	}
-	leftValue, _ := m.GetVarValue(left, context)
-	var rightValue interface{} = right
-	if rightStr, ok := right.(string); ok {
+	leftValue, _ := m.GetVarValue(assignExp.Left, nil, context)
+	var rightValue = assignExp.Right
+	if rightStr, ok := assignExp.Right.(string); ok {
 		if len(rightStr) > 1 && rightStr[0] == '$' {
-			rightValue, _ = m.GetVarValue(rightStr, context)
+			rightValue, _ = m.GetVarValue(rightStr, assignExp.RightPipeLine, context)
 		}
 	}
 	if rightValueStr, ok := rightValue.(string); ok {
 		rightValue = m.replaceMacro(rightValueStr, context)
 	}
-	return fn(left, leftValue, rightValue, context)
+	return fn(assignExp.Left, leftValue, rightValue, context)
 }
 
 func (m *Dictionary) ListVars() []string {
@@ -600,15 +589,19 @@ type NameValue struct {
 }
 
 type AssignExp struct {
-	Left       string
-	Right      interface{}
-	AssignName string
+	Left          string
+	Right         interface{}
+	AssignName    string
+	LeftPipeLine  *pipeline
+	RightPipeLine *pipeline
 }
 
 type CompareExp struct {
-	Left        string
-	Right       interface{}
-	CompareName string
+	Left          string
+	Right         interface{}
+	CompareName   string
+	LeftPipeLine  *pipeline
+	RightPipeLine *pipeline
 }
 
 type JsonExp struct {
@@ -619,14 +612,14 @@ type JsonExp struct {
 
 func (m *JsonExp) Execute(context Context) error {
 	for _, v := range m.compareExpList {
-		if ret, err := m.dict.Compare(v.CompareName, v.Left, v.Right, context); err != nil {
+		if ret, err := m.dict.compare(v, context); err != nil {
 			return nil
 		} else if !ret {
 			return nil
 		}
 	}
 	for _, v := range m.assignExpList {
-		if err := m.dict.Assign(v.AssignName, v.Left, v.Right, context); err != nil {
+		if err := m.dict.assign(v, context); err != nil {
 			return err
 		} else {
 			if breaked, ok := context.GetCtxData("$break"); ok {
@@ -739,6 +732,15 @@ func (m *JsonExpGroup) parse() error {
 						return fmt.Errorf("invalid groupSource, exp[1] is not string")
 					}
 					assignExp := &AssignExp{Left: exp[0].(string), Right: exp[2], AssignName: exp[1].(string)}
+					if sR, ok := assignExp.Right.(string); ok {
+						if hasPipeline(sR) {
+							varPipeline, err := newPipeline(varName, m.dict)
+							if err != nil {
+								return fmt.Errorf("create pipeline of [%s] fail, %s", sR, err.Error())
+							}
+							assignExp.RightPipeLine = varPipeline
+						}
+					}
 					jsonExp.assignExpList = append(jsonExp.assignExpList, assignExp)
 				} else {
 					for _, internalExp := range exp {
@@ -757,6 +759,15 @@ func (m *JsonExpGroup) parse() error {
 							return fmt.Errorf("invalid groupSource, exp[1] is not string")
 						}
 						assignExp := &AssignExp{Left: exp[0].(string), Right: exp[2], AssignName: exp[1].(string)}
+						if sR, ok := assignExp.Right.(string); ok {
+							if hasPipeline(sR) {
+								varPipeline, err := newPipeline(varName, m.dict)
+								if err != nil {
+									return fmt.Errorf("create pipeline of [%s] fail, %s", sR, err.Error())
+								}
+								assignExp.RightPipeLine = varPipeline
+							}
+						}
 						jsonExp.assignExpList = append(jsonExp.assignExpList, assignExp)
 					}
 				}
@@ -780,6 +791,7 @@ func (m *JsonExpGroup) parse() error {
 				// 优化运算符
 				if compareExp.CompareName == "in" || compareExp.CompareName == "not in" {
 					sR, ok := GetStringValue(compareExp.Right)
+					ok = !hasPipeline(sR)
 					if ok {
 						sR = strings.Trim(sR, ",")
 						sR = strings.Trim(sR, "，")
@@ -803,6 +815,24 @@ func (m *JsonExpGroup) parse() error {
 							}
 							compareExp.Right = mp
 						}
+					}
+				}
+
+				//pipeline
+				if hasPipeline(compareExp.Left) {
+					varPipeline, err := newPipeline(varName, m.dict)
+					if err != nil {
+						return fmt.Errorf("create pipeline of [%s] fail, %s", compareExp.Left, err.Error())
+					}
+					compareExp.LeftPipeLine = varPipeline
+				}
+				if sR, ok := GetStringValue(compareExp.Right); ok {
+					if hasPipeline(sR) {
+						varPipeline, err := newPipeline(varName, m.dict)
+						if err != nil {
+							return fmt.Errorf("create pipeline of [%s] fail, %s", sR, err.Error())
+						}
+						compareExp.RightPipeLine = varPipeline
 					}
 				}
 
@@ -881,7 +911,7 @@ func (m *Configuration) GetNameValue(key string, context Context) (interface{}, 
 	}
 	if retStr, ok := ret.(string); ok {
 		if len(retStr) > 1 && retStr[0] == '$' {
-			if retValue, err := m.dict.GetVarValue(retStr, context); err == nil {
+			if retValue, err := m.dict.GetVarValue(retStr, nil, context); err == nil {
 				return retValue, true
 			}
 		}
