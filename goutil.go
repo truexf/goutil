@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -387,6 +388,12 @@ func GetStringValue(v interface{}) string {
 	if v == nil {
 		return ""
 	}
+	if ret, ok := v.(string); ok {
+		return ret
+	}
+	if ret, ok := v.(fmt.Stringer); ok {
+		return ret.String()
+	}
 	rv := reflect.ValueOf(v)
 	switch kd := rv.Kind(); kd {
 	case reflect.Slice:
@@ -402,6 +409,55 @@ func GetStringValue(v interface{}) string {
 	}
 }
 
+func GetFloatValue(v interface{}) (float64, bool) {
+	if v == nil {
+		return 0, true
+	}
+	if ret, ok := v.(float64); ok {
+		return ret, true
+	}
+	rv := reflect.ValueOf(v)
+	switch kd := rv.Kind(); kd {
+	case reflect.Slice:
+		return 0, false
+	case reflect.String:
+		vs := v.(string)
+		if ret, err := strconv.ParseFloat(vs, 64); err != nil {
+			return 0, false
+		} else {
+			return ret, true
+		}
+	case reflect.Float64:
+		return v.(float64), true
+	case reflect.Float32:
+		return float64(v.(float32)), true
+	case reflect.Int:
+		return float64(v.(int)), true
+	case reflect.Int8:
+		return float64(v.(int8)), true
+	case reflect.Int16:
+		return float64(v.(int16)), true
+	case reflect.Int32:
+		return float64(v.(int32)), true
+	case reflect.Int64:
+		return float64(v.(int64)), true
+	case reflect.Uint:
+		return float64(v.(uint)), true
+	case reflect.Uint8:
+		return float64(v.(uint8)), true
+	case reflect.Uint16:
+		return float64(v.(uint16)), true
+	case reflect.Uint32:
+		return float64(v.(uint32)), true
+	case reflect.Uint64:
+		return float64(v.(uint64)), true
+	case reflect.Uintptr:
+		return float64(v.(uintptr)), true
+	default:
+		return 0, false
+	}
+}
+
 func GetIntValueDefault(v interface{}, dft int64) int64 {
 	if ret, ok := GetIntValue(v); !ok {
 		return dft
@@ -413,6 +469,9 @@ func GetIntValueDefault(v interface{}, dft int64) int64 {
 func GetIntValue(v interface{}) (int64, bool) {
 	if v == nil {
 		return 0, true
+	}
+	if ret, ok := v.(int64); ok {
+		return ret, true
 	}
 	rv := reflect.ValueOf(v)
 	switch kd := rv.Kind(); kd {
@@ -460,9 +519,12 @@ func GetIntValue(v interface{}) (int64, bool) {
 	}
 }
 
-func GetFloatValue(v interface{}) (float64, bool) {
+func GetCeilIntValue(v interface{}) (int64, bool) {
 	if v == nil {
 		return 0, true
+	}
+	if ret, ok := v.(int64); ok {
+		return ret, true
 	}
 	rv := reflect.ValueOf(v)
 	switch kd := rv.Kind(); kd {
@@ -470,37 +532,41 @@ func GetFloatValue(v interface{}) (float64, bool) {
 		return 0, false
 	case reflect.String:
 		vs := v.(string)
-		if ret, err := strconv.ParseFloat(vs, 64); err != nil {
-			return 0, false
+		if ret, err := strconv.ParseInt(vs, 0, 64); err != nil {
+			if retFloat, err := strconv.ParseFloat(vs, 64); err != nil {
+				return 0, false
+			} else {
+				return int64(retFloat), true
+			}
 		} else {
 			return ret, true
 		}
 	case reflect.Float64:
-		return v.(float64), true
+		return int64(math.Ceil(v.(float64))), true
 	case reflect.Float32:
-		return float64(v.(float32)), true
+		return int64(math.Ceil(float64(v.(float32)))), true
 	case reflect.Int:
-		return float64(v.(int)), true
+		return int64(v.(int)), true
 	case reflect.Int8:
-		return float64(v.(int8)), true
+		return int64(v.(int8)), true
 	case reflect.Int16:
-		return float64(v.(int16)), true
+		return int64(v.(int16)), true
 	case reflect.Int32:
-		return float64(v.(int32)), true
+		return int64(v.(int32)), true
 	case reflect.Int64:
-		return float64(v.(int64)), true
+		return v.(int64), true
 	case reflect.Uint:
-		return float64(v.(uint)), true
+		return int64(v.(uint)), true
 	case reflect.Uint8:
-		return float64(v.(uint8)), true
+		return int64(v.(uint8)), true
 	case reflect.Uint16:
-		return float64(v.(uint16)), true
+		return int64(v.(uint16)), true
 	case reflect.Uint32:
-		return float64(v.(uint32)), true
+		return int64(v.(uint32)), true
 	case reflect.Uint64:
-		return float64(v.(uint64)), true
+		return int64(v.(uint64)), true
 	case reflect.Uintptr:
-		return float64(v.(uintptr)), true
+		return int64(v.(uintptr)), true
 	default:
 		return 0, false
 	}
@@ -760,3 +826,13 @@ type FileInfoListModTimeAsc []os.FileInfo
 func (p FileInfoListModTimeAsc) Len() int           { return len(p) }
 func (p FileInfoListModTimeAsc) Less(i, j int) bool { return p[i].ModTime().Before(p[j].ModTime()) }
 func (p FileInfoListModTimeAsc) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+func CombineUint64(h uint32, l uint32) uint64 {
+	h64 := uint64(h) << 32
+	l64 := uint64(l)
+	return h64 | l64
+}
+
+func BreakUint64(u64 uint64) (h uint32, l uint32) {
+	return uint32(u64 >> 32), uint32(u64 << 32 >> 32)
+}

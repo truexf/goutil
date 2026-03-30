@@ -63,6 +63,12 @@ func GetStringValue(v interface{}) (string, bool) {
 	if v == nil {
 		return "", true
 	}
+	if ret, ok := v.(string); ok {
+		return ret, true
+	}
+	if ret, ok := v.(fmt.Stringer); ok {
+		return ret.String(), true
+	}
 	rv := reflect.ValueOf(v)
 	switch kd := rv.Kind(); kd {
 	case reflect.Slice:
@@ -642,36 +648,36 @@ func (m *JsonExp) GetAssignExpList() []*AssignExp {
 }
 
 /*
-    a group of JsonExp
-	json-exp group configuration json demo:
-	{
-		//json-exp group, from first to last, executing each json-exp node, breaking execution if variant $break = true, $break is a system variant
-		"filter": [
-			//json-exp node1, if all compare-exp return true, then execute assign-exp
-			[
-				["left-var","compare-name","right-var"], //compare-exp
-				["left-var","compare-name","right-var"], //compare-exp
-				["left-var","assign-name","right-var"], //the last exp is always an assign-exp
-			],
-
-			//json-exp node2
-			[
-				["left-var","compare-name","right-var"], //compare-exp
-				["left-var","compare-name","right-var"], //compare-exp
-				//multi-assign-exp
+	    a group of JsonExp
+		json-exp group configuration json demo:
+		{
+			//json-exp group, from first to last, executing each json-exp node, breaking execution if variant $break = true, $break is a system variant
+			"filter": [
+				//json-exp node1, if all compare-exp return true, then execute assign-exp
 				[
-					["left-var","assign-name","right-var"],
-					["left-var","assign-name","right-var"],
-					["left-var","assign-name","right-var"]
-				]
-			],
+					["left-var","compare-name","right-var"], //compare-exp
+					["left-var","compare-name","right-var"], //compare-exp
+					["left-var","assign-name","right-var"], //the last exp is always an assign-exp
+				],
 
-			//json-exp node3
-			[
-				//...
+				//json-exp node2
+				[
+					["left-var","compare-name","right-var"], //compare-exp
+					["left-var","compare-name","right-var"], //compare-exp
+					//multi-assign-exp
+					[
+						["left-var","assign-name","right-var"],
+						["left-var","assign-name","right-var"],
+						["left-var","assign-name","right-var"]
+					]
+				],
+
+				//json-exp node3
+				[
+					//...
+				]
 			]
-		]
-	}
+		}
 */
 type JsonExpGroup struct {
 	dict        *Dictionary
@@ -770,6 +776,36 @@ func (m *JsonExpGroup) parse() error {
 					return fmt.Errorf("invalid groupSource, exp[1] is not string")
 				}
 				compareExp := &CompareExp{Left: exp[0].(string), Right: exp[2], CompareName: exp[1].(string)}
+
+				// 优化运算符
+				if compareExp.CompareName == "in" || compareExp.CompareName == "not in" {
+					sR, ok := GetStringValue(compareExp.Right)
+					if ok {
+						sR = strings.Trim(sR, ",")
+						sR = strings.Trim(sR, "，")
+					}
+					if ok && sR != "" {
+						if sR[0] != '$' && strings.Index(sR, ",") < 0 && strings.Index(sR, "，") < 0 {
+							if compareExp.CompareName == "in" {
+								compareExp.CompareName = "="
+							} else if compareExp.CompareName == "not in" {
+								compareExp.CompareName = "!="
+							}
+							compareExp.Right = sR
+						} else {
+							// change to map for searching faster
+							mp := make(map[string]struct{})
+							lst := strings.Split(sR, ",")
+							for _, v := range lst {
+								if v != "" {
+									mp[v] = struct{}{}
+								}
+							}
+							compareExp.Right = mp
+						}
+					}
+				}
+
 				jsonExp.compareExpList = append(jsonExp.compareExpList, compareExp)
 			}
 		}
